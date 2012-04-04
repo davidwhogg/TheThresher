@@ -32,7 +32,7 @@ class Image(object):
 
         # Grab the image and header from the FITS file.
         w = 64
-        self.image = np.array(f[0].data[w:-w:2, w:-w:2], dtype=float)
+        self.image = np.array(f[0].data[w:-w, w:-w], dtype=float)
         self.info = {}
         for k in f[0].header.keys():
             self.info[k] = f[0].header[k]

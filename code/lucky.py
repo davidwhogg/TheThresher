@@ -1,10 +1,18 @@
-# This file is part of the Lucky Imaging project.
+"""
+This file is part of the Lucky Imaging project.
 
-# issues:
-# -------
-# - should use scipy.sparse.
+issues:
+-------
+- smoothness regularization for scene?
+- L2 regularization for PSF
+- weak regularization sum(PSF) ~= 1
+- non-negativity?
+
+"""
 
 import numpy as np
+from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import lsqr
 
 def xy2index(shape, x, y):
     '''
@@ -42,17 +50,16 @@ def image2matrix(psfImage, sceneShape):
 
     ### output:
 
-    * A sparse matrix that has shape ((Mx+Nx-1)*(My+Ny-1), Nx*Ny).
-      Use as follows:
+    * A scipy.sparse matrix that has shape ((Mx+Nx-1)*(My+Ny-1),
+      Nx*Ny).  Use as follows:
 
           psfMatrix = image2matrix(psfImage, sceneImage.shape)
-          modelVector = np.dot(psfMatrix, sceneImage.reshape(Nx*Ny))
+          modelVector = psfMatrix * sceneImage.reshape(Nx*Ny)
           modelImage = modelVector.reshape((Mx+Nx-1, My+Ny-1))
 
     ### issues:
 
     * There is probably a faster way to do all this.
-    * Returns a numpy array; should return a scipy.sparse matrix.
     '''
     Mx, My = psfImage.shape
     Nx, Ny = sceneShape
@@ -60,12 +67,17 @@ def image2matrix(psfImage, sceneShape):
     sceneX, sceneY = index2xy(sceneShape, sceneIndex)
     modelShape = (Mx + Nx - 1, My + Ny - 1)
     Px, Py = modelShape
-    psfMatrix = np.zeros((Px * Py, Nx * Ny))
+    vals = np.zeros(Mx * My * Nx * Ny)
+    rows = np.zeros_like(vals, dtype=int)
+    cols = np.zeros_like(vals, dtype=int)
     for i in range(Mx * My):
         psfX, psfY = index2xy(psfImage.shape, i)
-        modelIndex = xy2index(modelShape, psfX + sceneX, psfY + sceneY)
-        psfMatrix[modelIndex, sceneIndex] = psfImage[psfX, psfY]
-    return psfMatrix
+        modelIndex = xy2index(modelShape, psfX + sceneX, psfY + sceneY).astype(int)
+        s = slice(i * Nx * Ny, (i+1) * Nx * Ny)
+        vals[s] = psfImage[psfX, psfY]
+        rows[s] = modelIndex
+        cols[s] = sceneIndex
+    return csr_matrix((vals, (rows, cols)), shape=((Mx+Nx-1)*(My+Ny-1), Nx*Ny))
 
 def inference_step(data, psf, scene):
     '''
@@ -90,11 +102,13 @@ def inference_step(data, psf, scene):
     '''
     dataVector = data.reshape(data.size)
     sceneMatrix = image2matrix(scene, psf.shape)
-    newPsf, res, rank, s = np.linalg.lstsq(sceneMatrix, dataVector)
+    (newPsf, istop, niters, r1norm, r2norm, anorm, acond,
+     arnorm, xnorm, var) = lsqr(sceneMatrix, dataVector)
     print "got PSF"
     newPsf = newPsf.reshape(psf.shape)
     psfMatrix = image2matrix(newPsf, scene.shape)
-    newScene, res, rank, s = np.linalg.lstsq(psfMatrix, dataVector)
+    (newScene, istop, niters, r1norm, r2norm, anorm, acond,
+     arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
     print "got scene"
     return newPsf, newScene.reshape(scene.shape)
 
@@ -135,10 +149,10 @@ def unit_tests():
     scene[8,3] = 3.0
     scene[7,9] = 4.0
     psfMatrix = image2matrix(psf, scene.shape)
-    modelVector = np.dot(psfMatrix, scene.reshape(Nx*Ny))
+    modelVector = psfMatrix * scene.reshape(Nx*Ny)
     modelImage1 = modelVector.reshape((Mx+Nx-1, My+Ny-1))
     sceneMatrix = image2matrix(scene, psf.shape)
-    modelVector = np.dot(sceneMatrix, psf.reshape(Mx*My))
+    modelVector = sceneMatrix * psf.reshape(Mx*My)
     modelImage2 = modelVector.reshape((Mx+Nx-1, My+Ny-1))
     print modelImage1 - modelImage2
     assert(np.all((modelImage1 - modelImage2) == 0))
@@ -150,7 +164,7 @@ def unit_tests():
     assert(np.all((modelImage1 - modelImage3) == 0))
     data = modelImage3 + 0.01 * np.random.normal(size=modelImage3.shape)
     newPsf, newScene = inference_step(data, psf, scene)
-    print psf, newPsf
+    print (100 * (newPsf - psf)).astype(int)
     print 'all tests passed'
     return None
 
@@ -161,7 +175,7 @@ if __name__ == '__main__':
 
     images = [115, 137, 255,256,605, 1000, 1023, 1100, 1536, 2400]
 
-    hw = 10
+    hw = 20
     psf = np.zeros((2*hw+1, 2*hw+1))
 
     scene = Image(images[0])[hw:-hw, hw:-hw]
