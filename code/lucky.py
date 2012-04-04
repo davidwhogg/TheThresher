@@ -48,6 +48,11 @@ def image2matrix(psfImage, sceneShape):
           psfMatrix = image2matrix(psfImage, sceneImage.shape)
           modelVector = np.dot(psfMatrix, sceneImage.reshape(Nx*Ny))
           modelImage = modelVector.reshape((Mx+Nx-1, My+Ny-1))
+
+    ### issues:
+
+    * There is probably a faster way to do all this.
+    * Returns a numpy array; should return a scipy.sparse matrix.
     '''
     Mx, My = psfImage.shape
     Nx, Ny = sceneShape
@@ -61,6 +66,34 @@ def image2matrix(psfImage, sceneShape):
         modelIndex = xy2index(modelShape, psfX + sceneX, psfY + sceneY)
         psfMatrix[modelIndex, sceneIndex] = psfImage[psfX, psfY]
     return psfMatrix
+
+def inference_step(data, psf, scene):
+    '''
+    # `inference_step()`:
+
+    Take data and a current belief about the scene; infer the psf for
+    this image given the scene, and infer a new scene given the
+    inferred image and the inferred psf.
+
+    ### input:
+
+    * `data`: An individual image.
+    * `psf`: A PSF image (used only for shape and size information).
+    * `scene`: The current best guess for the scene that (after PSF
+      convolution) generates the image.
+
+    ### output:
+
+    * `psf`:
+    * `newScene`:
+
+    ### issues:
+
+    * Not yet written.
+    '''
+    dataVector = data.reshape(data.size)
+    sceneMatrix = image2matrix(scene, psf.shape)
+    return None
 
 def unit_tests():
     '''
