@@ -9,6 +9,8 @@ __all__ = ["Image"]
 
 import os
 
+import numpy as np
+
 import pyfits
 
 class Image(object):
@@ -32,7 +34,7 @@ class Image(object):
 
     @classmethod
     def get_all(cls):
-
+        pass
 
     @property
     def image(self):
@@ -43,7 +45,8 @@ class Image(object):
         f = pyfits.open(self.path)
 
         # Grab the image and header from the FITS file.
-        self._image = f[0].data
+        w = 64
+        self._image = np.array(f[0].data[w:-w, w:-w], dtype=float)
         self.info = {}
         for k in f[0].header.keys():
             self.info[k] = f[0].header[k]

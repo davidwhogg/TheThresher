@@ -4,3 +4,6 @@
 *.png
 p1640_pca_model.pdf
 venv
+.DS_Store
+*.pyc
+data
