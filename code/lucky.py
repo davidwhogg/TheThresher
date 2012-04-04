@@ -91,9 +91,11 @@ def inference_step(data, psf, scene):
     dataVector = data.reshape(data.size)
     sceneMatrix = image2matrix(scene, psf.shape)
     newPsf, res, rank, s = np.linalg.lstsq(sceneMatrix, dataVector)
+    print "got PSF"
     newPsf = newPsf.reshape(psf.shape)
     psfMatrix = image2matrix(newPsf, scene.shape)
     newScene, res, rank, s = np.linalg.lstsq(psfMatrix, dataVector)
+    print "got scene"
     return newPsf, newScene.reshape(scene.shape)
 
 def unit_tests():
@@ -154,3 +156,45 @@ def unit_tests():
 
 if __name__ == '__main__':
     unit_tests()
+    import matplotlib.pyplot as pl
+    from data import Image
+
+    images = [115, 137, 255,256,605, 1000, 1023, 1100, 1536, 2400]
+
+    hw = 10
+    psf = np.zeros((2*hw+1, 2*hw+1))
+
+    scene = Image(images[0])[hw:-hw, hw:-hw]
+
+    fig = pl.figure(figsize=(10,10))
+
+    for count, _id in enumerate(images):
+        data = Image(_id).image
+        psf, newScene = inference_step(data, psf, scene)
+
+        pl.clf()
+
+        ax1 = fig.add_subplot(221)
+        ax2 = fig.add_subplot(222)
+        ax3 = fig.add_subplot(223)
+        ax4 = fig.add_subplot(224)
+
+        my_plot = lambda ax, im: ax.imshow(im, cmap="gray", interpolation="nearest")
+
+        my_plot(ax1, data)
+        ax1.set_title("Data")
+
+        my_plot(ax2, scene)
+        ax2.set_title("Previous Scene")
+
+        my_plot(ax3, psf)
+        ax3.set_title("Inferred PSF")
+
+        my_plot(ax4, newScene)
+        ax4.set_title("Inferred Scene")
+
+        pl.savefig("img/%d.png"%_id)
+
+        ndata = 1 + count
+        scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
+

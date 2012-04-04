@@ -9,6 +9,8 @@ __all__ = ["Image"]
 
 import os
 
+import numpy as np
+
 import pyfits
 
 _bp = os.environ.get("LUCKY_DATA",
@@ -29,7 +31,8 @@ class Image(object):
         f = pyfits.open(full_path)
 
         # Grab the image and header from the FITS file.
-        self.image = f[0].data
+        w = 64
+        self.image = np.array(f[0].data[w:-w:2, w:-w:2], dtype=float)
         self.info = {}
         for k in f[0].header.keys():
             self.info[k] = f[0].header[k]
