@@ -84,16 +84,17 @@ def inference_step(data, psf, scene):
 
     ### output:
 
-    * `psf`:
+    * `newPsf`:
     * `newScene`:
 
-    ### issues:
-
-    * Not yet written.
     '''
     dataVector = data.reshape(data.size)
     sceneMatrix = image2matrix(scene, psf.shape)
-    return None
+    newPsf, res, rank, s = np.linalg.lstsq(sceneMatrix, dataVector)
+    newPsf = newPsf.reshape(psf.shape)
+    psfMatrix = image2matrix(newPsf, scene.shape)
+    newScene, res, rank, s = np.linalg.lstsq(psfMatrix, dataVector)
+    return newPsf, newScene.reshape(scene.shape)
 
 def unit_tests():
     '''
@@ -145,6 +146,9 @@ def unit_tests():
             modelImage3[psfx:psfx+Nx,psfy:psfy+Ny] += psf[psfx, psfy] * scene
     print modelImage1 - modelImage3
     assert(np.all((modelImage1 - modelImage3) == 0))
+    data = modelImage3 + 0.01 * np.random.normal(size=modelImage3.shape)
+    newPsf, newScene = inference_step(data, psf, scene)
+    print psf, newPsf
     print 'all tests passed'
     return None
 
