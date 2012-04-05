@@ -28,7 +28,7 @@ class Image(object):
     _fn_format = "bpl1m001-en07-20120304-{0}-e00.fits"
 
     def __init__(self, _id):
-        self.fn = self.fn_format.format("%04d"%_id)
+        self.fn = self._fn_format.format("%04d"%_id)
         self.path = os.path.join(self._bp, self.fn)
         self._image = None
 
@@ -46,12 +46,21 @@ class Image(object):
 
         # Grab the image and header from the FITS file.
         w = 64
-        self._image = np.array(f[0].data[w:-w, w:-w], dtype=float)
+        data = np.array(f[0].data, dtype=float)
         self.info = {}
-        for k in f[0].header.keys():
-            self.info[k] = f[0].header[k]
-
+        # The following is commented out because it doesn't work for Hogg on broiler.
+        #for k in f[0].header.keys():
+        #    self.info[k] = f[0].header[k]
         f.close()
+
+        # Centroid and take an image section.
+        s = np.sum(data)
+        xc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=1)) / s))
+        yc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=0)) / s))
+        self.info['xc'] = xc
+        self.info['yc'] = yc
+        hw = 50
+        self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
 
         return self._image
 
