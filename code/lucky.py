@@ -68,8 +68,8 @@ def image2matrix(psfImage, sceneShape):
     modelShape = (Mx + Nx - 1, My + Ny - 1)
     Px, Py = modelShape
     vals = np.zeros(Mx * My * Nx * Ny)
-    rows = np.zeros_like(vals, dtype=int)
-    cols = np.zeros_like(vals, dtype=int)
+    rows = np.zeros_like(vals).astype(int)
+    cols = np.zeros_like(vals).astype(int)
     for i in range(Mx * My):
         psfX, psfY = index2xy(psfImage.shape, i)
         modelIndex = xy2index(modelShape, psfX + sceneX, psfY + sceneY).astype(int)
