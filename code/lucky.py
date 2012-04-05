@@ -3,16 +3,17 @@ This file is part of the Lucky Imaging project.
 
 issues:
 -------
+- estimation of PSF with non-negativity not working very well; see inference_step() code
 - smoothness regularization for scene?
 - L2 regularization for PSF
 - weak regularization sum(PSF) ~= 1
-- non-negativity?
 
 """
 
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
+import scipy.optimize as op
 
 def xy2index(shape, x, y):
     '''
@@ -87,6 +88,9 @@ def inference_step(data, psf, scene):
     this image given the scene, and infer a new scene given the
     inferred image and the inferred psf.
 
+    In both inferences (PSF and scene), this code infers a sky level
+    simultaneously.  That might seem like a detail, but it matters.
+
     ### input:
 
     * `data`: An individual image.
@@ -98,19 +102,34 @@ def inference_step(data, psf, scene):
 
     * `newPsf`:
     * `newScene`:
-
     '''
     dataVector = data.reshape(data.size)
     sceneMatrix = image2matrix(scene, psf.shape)
-    (newPsf, istop, niters, r1norm, r2norm, anorm, acond,
-     arnorm, xnorm, var) = lsqr(sceneMatrix, dataVector)
+    if False: # l_bfgs_b method
+        def cost(psf):
+            return (np.sum((dataVector - psf[0] - sceneMatrix * psf[1:])**2),
+                    np.append(-2. * np.sum(dataVector - psf[0] - sceneMatrix * psf[1:]), -2. * sceneMatrix.T * (dataVector - psf[0] - sceneMatrix * psf[1:])))
+        bounds = [(None, None)].append([(0., None) for p in psf[1:]])
+        newPsf, f, d = op.fmin_l_bfgs_b(cost, np.zeros(psf.size + 1), factr=0., pgtol=0.)
+        print d
+        newPsf = newPsf[1:].reshape(psf.shape)
+    if True: # levmar method
+        def resid(lnpsf):
+            return dataVector - lnpsf[0] - sceneMatrix * np.exp(lnpsf[1:])
+        (newLnPsf, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psf.size + 1), full_output=True, xtol=0., ftol=0.)
+        print ier, infodict['nfev']
+        newPsf = np.exp(newLnPsf[1:]).reshape(psf.shape)
+    if False: # linear least squares method
+        (newPsf, istop, niters, r1norm, r2norm, anorm, acond, arnorm, xnorm, var) = lsqr(sceneMatrix, dataVector)
+        newPsf = newPsf.reshape(psf.shape)
     print "got PSF"
-    newPsf = newPsf.reshape(psf.shape)
     psfMatrix = image2matrix(newPsf, scene.shape)
-    (newScene, istop, niters, r1norm, r2norm, anorm, acond,
-     arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
+    def sresid(scenepars):
+        return dataVector - scenepars[0] - psfMatrix * scenepars[1:]
+    (newScene, cov_x, infodict, mesg, ier) = op.leastsq(sresid, np.zeros(scene.size + 1), full_output=True)
+    print ier, infodict['nfev']
     print "got scene"
-    return newPsf, newScene.reshape(scene.shape)
+    return newPsf, newScene[1:].reshape(scene.shape)
 
 def unit_tests():
     '''
@@ -165,17 +184,23 @@ def unit_tests():
     data = modelImage3 + 0.01 * np.random.normal(size=modelImage3.shape)
     newPsf, newScene = inference_step(data, psf, scene)
     print (100 * (newPsf - psf)).astype(int)
+    assert(np.all((100 * (newPsf - psf)).astype(int) == 0))
     print 'all tests passed'
     return None
 
 if __name__ == '__main__':
     unit_tests()
+    import matplotlib
+    matplotlib.use('Agg')
+    from matplotlib import rc
+    rc('font',**{'family':'serif','serif':'Computer Modern Roman','size':12})
+    rc('text', usetex=True)
     import matplotlib.pyplot as pl
     from data import Image
 
     images = [115, 137, 255,256,605, 1000, 1023, 1100, 1536, 2400]
 
-    hw = 20
+    hw = 7
     psf = np.zeros((2*hw+1, 2*hw+1))
 
     scene = Image(images[0])[hw:-hw, hw:-hw]
