@@ -195,20 +195,27 @@ if __name__ == '__main__':
     from matplotlib import rc
     rc('font',**{'family':'serif','serif':'Computer Modern Roman','size':12})
     rc('text', usetex=True)
+    import os
     import matplotlib.pyplot as pl
     from data import Image
 
-    images = [115, 137, 255,256,605, 1000, 1023, 1100, 1536, 2400]
+    images = Image.get_all()
 
     hw = 7
     psf = np.zeros((2*hw+1, 2*hw+1))
 
-    scene = Image(images[0])[hw:-hw, hw:-hw]
+    scene = images[0][hw:-hw, hw:-hw]
 
     fig = pl.figure(figsize=(10,10))
 
-    for count, _id in enumerate(images):
-        data = Image(_id).image
+    bp = os.path.join(Image._bp, "img")
+    try:
+        os.makedirs(bp)
+    except os.error:
+        pass
+
+    for count, img in enumerate(images):
+        data = img.image
         psf, newScene = inference_step(data, psf, scene)
 
         pl.clf()
@@ -232,7 +239,7 @@ if __name__ == '__main__':
         my_plot(ax4, newScene)
         ax4.set_title("Inferred Scene")
 
-        pl.savefig("img/%d.png"%_id)
+        pl.savefig(os.path.join(bp, "%04d.png"%count))
 
         ndata = 1 + count
         scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
