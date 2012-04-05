@@ -8,9 +8,9 @@ Note: the filenames are currently _hard-coded_ for this particular project.
 __all__ = ["Image"]
 
 import os
+import re
 
 import numpy as np
-
 import pyfits
 
 class Image(object):
@@ -27,14 +27,26 @@ class Image(object):
                 "/data2/dfm/mars/bpl1m001-en07-20120304/unspooled")
     _fn_format = "bpl1m001-en07-20120304-{0}-e00.fits"
 
-    def __init__(self, _id):
-        self.fn = self.fn_format.format("%04d"%_id)
-        self.path = os.path.join(self._bp, self.fn)
+    def __init__(self, _id=None, fn=None):
+        assert _id is not None or fn is not None
+        if fn is None:
+            fn = self._fn_format.format("%04d"%_id)
+        self.path = os.path.join(self._bp, fn)
         self._image = None
 
     @classmethod
     def get_all(cls):
-        pass
+        """
+        Get a list of `Image` objects for all of the FITS files in the base
+        directory.
+
+        """
+        entries = os.listdir(cls._bp)
+        result = []
+        for e in entries:
+            if os.path.splitext(e)[1] == ".fits":
+                result.append(cls(fn=e))
+        return result
 
     @property
     def image(self):
@@ -59,10 +71,5 @@ class Image(object):
         return self.image[s]
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as pl
-
-    i = Image(115)
-    pl.imshow(i.image)
-
-    pl.savefig("115.png")
+    print Image.get_all()
 
