@@ -33,54 +33,6 @@ def index2xy(shape, i):
     '''
     return ((i / shape[1]), (i % shape[1]))
 
-def image2matrix(psfImage, sceneShape):
-    '''
-    # `image2matrix()`:
-
-    Take a PSF-like kernel image and reform it so that it is a matrix
-    that can be used to do convolution of a "true scene" image in a
-    matrix operation, in which the true scene image is flattened to a
-    vector and the PSF image is expanded into a large matrix.  See,
-    eg: <http://adsabs.harvard.edu/abs/2011A%26A...531A...9H>.
-
-    ### input:
-
-    * `psfImage`: The (Mx, My)-shaped convolution kernel image (think
-      of it as the PSF).
-    * `sceneShape`: The (Nx, Ny) tuple shape of the image to be
-      convolved (think of it as the true scene).
-
-    ### output:
-
-    * A scipy.sparse matrix that has shape ((Mx+Nx-1)*(My+Ny-1),
-      Nx*Ny).  Use as follows:
-
-          psfMatrix = image2matrix(psfImage, sceneImage.shape)
-          modelVector = psfMatrix * sceneImage.reshape(Nx*Ny)
-          modelImage = modelVector.reshape((Mx+Nx-1, My+Ny-1))
-
-    ### issues:
-
-    * There is probably a faster way to do all this.
-    '''
-    Mx, My = psfImage.shape
-    Nx, Ny = sceneShape
-    sceneIndex = np.arange(Nx * Ny)
-    sceneX, sceneY = index2xy(sceneShape, sceneIndex)
-    modelShape = (Mx + Nx - 1, My + Ny - 1)
-    Px, Py = modelShape
-    vals = np.zeros(Mx * My * Nx * Ny)
-    rows = np.zeros_like(vals).astype(int)
-    cols = np.zeros_like(vals).astype(int)
-    for i in range(Mx * My):
-        psfX, psfY = index2xy(psfImage.shape, i)
-        modelIndex = xy2index(modelShape, psfX + sceneX, psfY + sceneY).astype(int)
-        s = slice(i * Nx * Ny, (i+1) * Nx * Ny)
-        vals[s] = psfImage[psfX, psfY]
-        rows[s] = modelIndex
-        cols[s] = sceneIndex
-    return csr_matrix((vals, (rows, cols)), shape=((Mx+Nx-1)*(My+Ny-1), Nx*Ny))
-
 def infer_psf(data, scene):
     '''
     # `infer_psf()`:
@@ -106,9 +58,11 @@ def infer_psf(data, scene):
 
     * `psf`:
     '''
+    # make kernel
     # magic numbers `-0.5` and `(3,-4)` in next line
     kernel = np.exp(-0.5 * (np.arange(-3,4)[:,None]**2 + np.arange(-3,4)[None,:]**2))
     Kx, Ky = kernel.shape
+
     # deal with all the size and shape setup
     Nx, Ny = scene.shape
     Px, Py = data.shape
@@ -120,17 +74,18 @@ def infer_psf(data, scene):
     assert(Qy > 0)
     psfParameterShape = (Qx, Qy)
     psfParameterSize = Qx * Qy
-    dataVector = data.reshape(data.size)
+
     # build scene matrix from kernel-convolved scene
     kernelConvolvedScene = convolve(scene, kernel, mode="same")
     sceneMatrix = np.zeros((data.size, psfParameterSize))
-    # might have this order (dx vs dy) reversed
     for k in range(psfParameterSize):
         dx, dy = index2xy(psfParameterShape, k)
         dx -= Qx / 2
         dy -= Qx / 2
         sceneMatrix[:,k] = kernelConvolvedScene[(Mx / 2 + dx): -(Mx / 2 - dx), (My / 2 + dy): -(My / 2 - dy)].reshape(data.size)
-    sceneMatrix = sceneMatrix
+
+    # infer PSF and return
+    dataVector = data.reshape(data.size)
     if False: # l_bfgs_b method
         def cost(psf):
             return (np.sum((dataVector - psf[0] - np.dot(sceneMatrix, psf[1:]))**2),
@@ -145,10 +100,10 @@ def infer_psf(data, scene):
         (newLnPsfParameter, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psfParameterSize + 1), full_output=True, xtol=0., ftol=0.)
         print ier, infodict['nfev']
         newPsf = convolve(np.exp(newLnPsfParameter[1:]).reshape(psfParameterShape), kernel, mode="full")
-    print "got PSF"
+    print "got PSF", newPsf.shape
     return newPsf
 
-def infer_scene(data, psf):
+def infer_scene(data, psf, l2norm):
     '''
     # `infer_scene()`:
 
@@ -160,15 +115,44 @@ def infer_scene(data, psf):
 
     * `data`: An individual image.
     * `psf`: A PSF image (used only for shape and size information).
+    * `l2norm`: Amplitude for the (required) L2-norm regularization.
 
     ### output:
 
     * `scene`
     '''
+    # deal with all the size and shape setup
+    Px, Py = data.shape
+    Mx, My = psf.shape
+    Nx, Ny = (Px + Mx - 1, Py + My - 1)
+    sceneShape = (Nx, Ny)
+    sceneSize = Nx * Ny
+
+    # build psf matrix from psf
+    vals = whatever # ARGH
+    rows = whatever # ARGH
+    cols = whatever # ARGH
+    for k in range(data.size):
+        dx, dy = index2xy(data.shape, k)
+        # DO SOMETHING HERE!
+        s = slice(whatever) # ARGH
+    # L2Norm it
+    psfMatrix = csr_matrix((vals, (rows, cols)), shape=(data.size + sceneSize, sceneSize))
+
+##    vals = np.zeros(Mx * My * Nx * Ny)
+##    rows = np.zeros_like(vals).astype(int)
+##    cols = np.zeros_like(vals).astype(int)
+##    for i in range(Mx * My):
+##        psfX, psfY = index2xy(psfImage.shape, i)
+##        modelIndex = xy2index(modelShape, psfX + sceneX, psfY + sceneY).astype(int)
+##        s = slice(i * Nx * Ny, (i+1) * Nx * Ny)
+##        vals[s] = psfImage[psfX, psfY]
+##        rows[s] = modelIndex
+##        cols[s] = sceneIndex
+##    return csr_matrix((vals, (rows, cols)), shape=((Mx+Nx-1)*(My+Ny-1), Nx*Ny))
+
+    # infer scene and return
     dataVector = data.reshape(data.size)
-    sceneShape = (whatever)
-    sceneSize = whatever
-    psfMatrix = image2matrix(newPsf, sceneShape)
     def sresid(scenepars):
         return dataVector - scenepars[0] - psfMatrix * scenepars[1:]
     (newScene, cov_x, infodict, mesg, ier) = op.leastsq(sresid, np.zeros(sceneSize + 1), full_output=True)
@@ -183,7 +167,7 @@ def inference_step(data, psf, scene):
     Concatenation of `infer_psf()` and `infer_scene()`.
     '''
     newPsf = infer_psf(data, scene)
-    newScene = infer_scene(data, psf)
+    newScene = infer_scene(data, newPsf)
     return newPsf, newScene
 
 def unit_tests():
@@ -210,32 +194,6 @@ def unit_tests():
     print y1 - ygrid
     assert(np.all((x1 - xgrid) == 0))
     assert(np.all((y1 - ygrid) == 0))
-    psf = np.zeros((5, 7))
-    Mx, My = psf.shape
-    psf[2,2] = 0.5
-    psf[2,3] = 0.25
-    psf[3,3] = 0.25
-    psf[4,4] = 0.25
-    scene = np.zeros((11,11))
-    Nx, Ny = scene.shape
-    scene[3,3] = 1.0
-    scene[3,9] = 2.0
-    scene[8,3] = 3.0
-    scene[7,9] = 4.0
-    psfMatrix = image2matrix(psf, scene.shape)
-    modelVector = psfMatrix * scene.reshape(Nx*Ny)
-    modelImage1 = modelVector.reshape((Mx+Nx-1, My+Ny-1))
-    sceneMatrix = image2matrix(scene, psf.shape)
-    modelVector = sceneMatrix * psf.reshape(Mx*My)
-    modelImage2 = modelVector.reshape((Mx+Nx-1, My+Ny-1))
-    print modelImage1 - modelImage2
-    assert(np.all((modelImage1 - modelImage2) == 0))
-    modelImage3 = np.zeros((Mx+Nx-1, My+Ny-1))
-    for psfx in range(Mx):
-        for psfy in range(My):
-            modelImage3[psfx:psfx+Nx,psfy:psfy+Ny] += psf[psfx, psfy] * scene
-    print modelImage1 - modelImage3
-    assert(np.all((modelImage1 - modelImage3) == 0))
     data = np.zeros((64, 64))
     scene = np.zeros((96, 96))
     psf = np.zeros((33, 33))
