@@ -13,6 +13,7 @@ issues:
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
+from scipy.signal import convolve
 import scipy.optimize as op
 
 def xy2index(shape, x, y):
@@ -87,6 +88,13 @@ def infer_psf(data, scene):
     Take data and a current belief about the scene; infer the psf for
     this image given the scene.  This code infers a sky level
     simultaneously.  That might seem like a detail, but it matters.
+    There is also a Gaussian-like kernel hard-coded in here that is a
+    problem.
+
+    Note that the returned PSF (`psfShape` in the code) is *larger*
+    than the number of pixels implied by the number of free parameters
+    (`psfParameterShape`).  That is, the PSF it is padded out, because
+    of the aforementioned kernel.
 
     ### input:
 
@@ -98,27 +106,45 @@ def infer_psf(data, scene):
 
     * `psf`:
     '''
-    psfShape = (whatever)
-    psfSize = whatever
+    # magic numbers `-0.5` and `(3,-4)` in next line
+    kernel = np.exp(-0.5 * (np.arange(-3,4)[:,None]**2 + np.arange(-3,4)[None,:]**2))
+    Kx, Ky = kernel.shape
+    # deal with all the size and shape setup
+    Nx, Ny = scene.shape
+    Px, Py = data.shape
+    Mx, My = (Nx - Px + 1, Ny - Py + 1)
+    psfShape = (Mx, My)
+    psfSize = Mx * My
+    Qx, Qy = (Mx - Kx + 1, My - Ky + 1)
+    assert(Qx > 0)
+    assert(Qy > 0)
+    psfParameterShape = (Qx, Qy)
+    psfParameterSize = Qx * Qy
     dataVector = data.reshape(data.size)
-    sceneMatrix = image2matrix(scene, psfShape)
+    # build scene matrix from kernel-convolved scene
+    kernelConvolvedScene = convolve(scene, kernel, mode="same")
+    sceneMatrix = np.zeros((data.size, psfParameterSize))
+    # might have this order (dx vs dy) reversed
+    for k in range(psfParameterSize):
+        dx, dy = index2xy(psfParameterShape, k)
+        dx -= Qx / 2
+        dy -= Qx / 2
+        sceneMatrix[:,k] = kernelConvolvedScene[(Mx / 2 + dx): -(Mx / 2 - dx), (My / 2 + dy): -(My / 2 - dy)].reshape(data.size)
+    sceneMatrix = sceneMatrix
     if False: # l_bfgs_b method
         def cost(psf):
-            return (np.sum((dataVector - psf[0] - sceneMatrix * psf[1:])**2),
-                    np.append(-2. * np.sum(dataVector - psf[0] - sceneMatrix * psf[1:]), -2. * sceneMatrix.T * (dataVector - psf[0] - sceneMatrix * psf[1:])))
-        bounds = [(None, None)].append([(0., None) for p in psf[1:]])
-        newPsf, f, d = op.fmin_l_bfgs_b(cost, np.zeros(psfSize + 1), factr=0., pgtol=0.)
+            return (np.sum((dataVector - psf[0] - np.dot(sceneMatrix, psf[1:]))**2),
+                    np.append(-2. * np.sum(dataVector - psf[0] - np.dot(sceneMatrix, psf[1:])), -2. * np.dot(sceneMatrix.T, (dataVector - psf[0] - np.dot(sceneMatrix, psf[1:])))))
+        bounds = [(None, None)].append([(0., None) for p in range(psfParameterSize)])
+        newPsfParameter, f, d = op.fmin_l_bfgs_b(cost, np.zeros(psfParameterSize + 1), factr=0., pgtol=0.)
         print d
-        newPsf = newPsf[1:].reshape(psfShape)
+        newPsf = convolve(newPsfParameter[1:].reshape(psfParameterShape), kernel, mode="full")
     if True: # levmar method
         def resid(lnpsf):
-            return dataVector - lnpsf[0] - sceneMatrix * np.exp(lnpsf[1:])
-        (newLnPsf, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psfSize + 1), full_output=True, xtol=0., ftol=0.)
+            return dataVector - lnpsf[0] - np.dot(sceneMatrix, np.exp(lnpsf[1:]))
+        (newLnPsfParameter, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psfParameterSize + 1), full_output=True, xtol=0., ftol=0.)
         print ier, infodict['nfev']
-        newPsf = np.exp(newLnPsf[1:]).reshape(psfShape)
-    if False: # linear least squares method
-        (newPsf, istop, niters, r1norm, r2norm, anorm, acond, arnorm, xnorm, var) = lsqr(sceneMatrix, dataVector)
-        newPsf = newPsf.reshape(psfShape)
+        newPsf = convolve(np.exp(newLnPsfParameter[1:]).reshape(psfParameterShape), kernel, mode="full")
     print "got PSF"
     return newPsf
 
@@ -210,10 +236,10 @@ def unit_tests():
             modelImage3[psfx:psfx+Nx,psfy:psfy+Ny] += psf[psfx, psfy] * scene
     print modelImage1 - modelImage3
     assert(np.all((modelImage1 - modelImage3) == 0))
-    data = modelImage3 + 0.01 * np.random.normal(size=modelImage3.shape)
+    data = np.zeros((64, 64))
+    scene = np.zeros((96, 96))
+    psf = np.zeros((33, 33))
     newPsf, newScene = inference_step(data, psf, scene)
-    print (100 * (newPsf - psf)).astype(int)
-    assert(np.all((100 * (newPsf - psf)).astype(int) == 0))
     print 'all tests passed'
     return None
 
