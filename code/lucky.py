@@ -80,56 +80,85 @@ def image2matrix(psfImage, sceneShape):
         cols[s] = sceneIndex
     return csr_matrix((vals, (rows, cols)), shape=((Mx+Nx-1)*(My+Ny-1), Nx*Ny))
 
-def inference_step(data, psf, scene):
+def infer_psf(data, scene):
     '''
-    # `inference_step()`:
+    # `infer_psf()`:
 
     Take data and a current belief about the scene; infer the psf for
-    this image given the scene, and infer a new scene given the
-    inferred image and the inferred psf.
+    this image given the scene.  This code infers a sky level
+    simultaneously.  That might seem like a detail, but it matters.
 
-    In both inferences (PSF and scene), this code infers a sky level
+    ### input:
+
+    * `data`: An individual image.
+    * `scene`: The current best guess for the scene that (after PSF
+      convolution) generates the image.
+
+    ### output:
+
+    * `psf`:
+    '''
+    psfShape = (whatever)
+    psfSize = whatever
+    dataVector = data.reshape(data.size)
+    sceneMatrix = image2matrix(scene, psfShape)
+    if False: # l_bfgs_b method
+        def cost(psf):
+            return (np.sum((dataVector - psf[0] - sceneMatrix * psf[1:])**2),
+                    np.append(-2. * np.sum(dataVector - psf[0] - sceneMatrix * psf[1:]), -2. * sceneMatrix.T * (dataVector - psf[0] - sceneMatrix * psf[1:])))
+        bounds = [(None, None)].append([(0., None) for p in psf[1:]])
+        newPsf, f, d = op.fmin_l_bfgs_b(cost, np.zeros(psfSize + 1), factr=0., pgtol=0.)
+        print d
+        newPsf = newPsf[1:].reshape(psfShape)
+    if True: # levmar method
+        def resid(lnpsf):
+            return dataVector - lnpsf[0] - sceneMatrix * np.exp(lnpsf[1:])
+        (newLnPsf, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psfSize + 1), full_output=True, xtol=0., ftol=0.)
+        print ier, infodict['nfev']
+        newPsf = np.exp(newLnPsf[1:]).reshape(psfShape)
+    if False: # linear least squares method
+        (newPsf, istop, niters, r1norm, r2norm, anorm, acond, arnorm, xnorm, var) = lsqr(sceneMatrix, dataVector)
+        newPsf = newPsf.reshape(psfShape)
+    print "got PSF"
+    return newPsf
+
+def infer_scene(data, psf):
+    '''
+    # `infer_scene()`:
+
+    Take data and a current belief about the PSF; infer the scene for
+    this image given the PSF.  This code infers a sky level
     simultaneously.  That might seem like a detail, but it matters.
 
     ### input:
 
     * `data`: An individual image.
     * `psf`: A PSF image (used only for shape and size information).
-    * `scene`: The current best guess for the scene that (after PSF
-      convolution) generates the image.
 
     ### output:
 
-    * `newPsf`:
-    * `newScene`:
+    * `scene`
     '''
     dataVector = data.reshape(data.size)
-    sceneMatrix = image2matrix(scene, psf.shape)
-    if False: # l_bfgs_b method
-        def cost(psf):
-            return (np.sum((dataVector - psf[0] - sceneMatrix * psf[1:])**2),
-                    np.append(-2. * np.sum(dataVector - psf[0] - sceneMatrix * psf[1:]), -2. * sceneMatrix.T * (dataVector - psf[0] - sceneMatrix * psf[1:])))
-        bounds = [(None, None)].append([(0., None) for p in psf[1:]])
-        newPsf, f, d = op.fmin_l_bfgs_b(cost, np.zeros(psf.size + 1), factr=0., pgtol=0.)
-        print d
-        newPsf = newPsf[1:].reshape(psf.shape)
-    if True: # levmar method
-        def resid(lnpsf):
-            return dataVector - lnpsf[0] - sceneMatrix * np.exp(lnpsf[1:])
-        (newLnPsf, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psf.size + 1), full_output=True, xtol=0., ftol=0.)
-        print ier, infodict['nfev']
-        newPsf = np.exp(newLnPsf[1:]).reshape(psf.shape)
-    if False: # linear least squares method
-        (newPsf, istop, niters, r1norm, r2norm, anorm, acond, arnorm, xnorm, var) = lsqr(sceneMatrix, dataVector)
-        newPsf = newPsf.reshape(psf.shape)
-    print "got PSF"
-    psfMatrix = image2matrix(newPsf, scene.shape)
+    sceneShape = (whatever)
+    sceneSize = whatever
+    psfMatrix = image2matrix(newPsf, sceneShape)
     def sresid(scenepars):
         return dataVector - scenepars[0] - psfMatrix * scenepars[1:]
-    (newScene, cov_x, infodict, mesg, ier) = op.leastsq(sresid, np.zeros(scene.size + 1), full_output=True)
+    (newScene, cov_x, infodict, mesg, ier) = op.leastsq(sresid, np.zeros(sceneSize + 1), full_output=True)
     print ier, infodict['nfev']
     print "got scene"
-    return newPsf, newScene[1:].reshape(scene.shape)
+    return newScene[1:].reshape(sceneShape)
+
+def inference_step(data, psf, scene):
+    '''
+    # `inference_step()`:
+
+    Concatenation of `infer_psf()` and `infer_scene()`.
+    '''
+    newPsf = infer_psf(data, scene)
+    newScene = infer_scene(data, psf)
+    return newPsf, newScene
 
 def unit_tests():
     '''
