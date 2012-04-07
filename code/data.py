@@ -22,13 +22,16 @@ class Image(object):
 
     """
     def __init__(self, _id=None, fn=None,
-            bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled"):
+            bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled",
+            center=False):
         self._bp    = bp
         self.path   = os.path.join(self._bp, fn)
         self._image = None
+        self._center = center
 
     @classmethod
-    def get_all(cls, bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled"):
+    def get_all(cls, bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled",
+            center=False):
         """
         Get a list of `Image` objects for all of the FITS files in the base
         directory.
@@ -37,7 +40,7 @@ class Image(object):
         entries = os.listdir(bp)
         for e in entries:
             if os.path.splitext(e)[1] == ".fits":
-                yield cls(fn=e, bp=bp)
+                yield cls(fn=e, bp=bp, center=center)
 
     @property
     def image(self):
@@ -52,14 +55,15 @@ class Image(object):
         self.info = {}
         f.close()
 
-        # Centroid and take an image section.
-        s = np.sum(data)
-        xc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=1)) / s))
-        yc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=0)) / s))
-        self.info['xc'] = xc
-        self.info['yc'] = yc
-        hw = 50
-        self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
+        if self._center:
+            # Centroid and take an image section.
+            s = np.sum(data)
+            xc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=1)) / s))
+            yc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=0)) / s))
+            self.info['xc'] = xc
+            self.info['yc'] = yc
+            hw = 50
+            self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
 
         # re-scale flux values for no reason except to make the L2
         # norm more interpretable.

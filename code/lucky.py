@@ -318,12 +318,15 @@ if __name__ == '__main__':
     # Default data path to the Mars dataset.
     bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled"
     img_dir = "mars"
+    center = True
     if "--binary" in sys.argv:
         bp="/data2/dfm/lucky/binary"
         img_dir = "binary"
+        center = False
     if "--binary_short" in sys.argv:
         bp="/data2/dfm/lucky/binary_short"
         img_dir = "binary_short"
+        center = False
 
     try:
         os.makedirs(img_dir)
@@ -333,7 +336,7 @@ if __name__ == '__main__':
     hw = 13
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
-    for count, img in enumerate(Image.get_all(bp=bp)):
+    for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         if count == 0:
             scene = convolve(psf, img.image, mode="full")
         else:
