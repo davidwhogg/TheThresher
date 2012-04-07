@@ -174,8 +174,9 @@ def infer_scene(data, psf, l2norm):
     skyVector = np.zeros(data.size + sceneSize)
     (newScene, istop, niters, r1norm, r2norm, anorm, acond,
      arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
-    print "got scene", newScene.shape
-    return newScene[:sceneSize].reshape(sceneShape)
+    newScene = newScene[:sceneSize].reshape(sceneShape)
+    print "got scene", newScene.shape, np.min(newScene), np.max(newScene)
+    return newScene
 
 def inference_step(data, scene, l2norm, plot=None):
     '''
@@ -299,11 +300,11 @@ def functional_tests():
 
 if __name__ == '__main__':
     unit_tests()
-    functional_tests()
+    ## functional_tests()
     import os
     from data import Image
     images = Image.get_all()
-    hw = 11
+    hw = 10
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
     scene = convolve(psf, images[0].image, mode="full")
@@ -314,6 +315,6 @@ if __name__ == '__main__':
     for count, img in enumerate(images[1:]):
         print "starting work on img", count
         data = img.image
-        psf, newScene = inference_step(data, scene, 1.0, plot="img/%04d.png"%count)
+        psf, newScene = inference_step(data, scene, 0.01, plot="img/%04d.png"%count)
         ndata = 2 + count
         scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
