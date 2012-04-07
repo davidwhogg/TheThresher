@@ -4,8 +4,6 @@ This file is part of the Lucky Imaging project.
 issues:
 -------
 - l_bfgs_b non-negative optimization is FAILING
-- L2 regularization for PSF -- IF YOU L2 the scene YOU MUST L2 the PSF -- duh!
-- weak regularization sum(PSF) ~= 1
 
 """
 
@@ -39,7 +37,7 @@ def index2xy(shape, i):
     '''
     return ((i / shape[1]), (i % shape[1]))
 
-def infer_psf(data, scene):
+def infer_psf(data, scene, l2norm):
     '''
     # `infer_psf()`:
 
@@ -54,7 +52,7 @@ def infer_psf(data, scene):
     (`psfParameterShape`).  That is, the PSF it is padded out, because
     of the aforementioned kernel.
 
-    Bug: There is a reversal (a `[:0:-1]`) in the code that is not
+    Bug: There is a reversal (a `[::-1]`) in the code that is not
     fully understood at present.
 
     ### input:
@@ -86,15 +84,21 @@ def infer_psf(data, scene):
 
     # build scene matrix from kernel-convolved scene
     kernelConvolvedScene = convolve(scene, kernel, mode="same")
-    sceneMatrix = np.zeros((data.size, psfParameterSize))
+    sceneMatrix = np.zeros((data.size + psfParameterSize, psfParameterSize + 1))
     for k in range(psfParameterSize):
         dx, dy = index2xy(psfParameterShape, k)
         dx -= Qx / 2
         dy -= Qx / 2
-        sceneMatrix[:,k] = kernelConvolvedScene[(Mx / 2 + dx): -(Mx / 2 - dx), (My / 2 + dy): -(My / 2 - dy)].reshape(data.size)
+        sceneMatrix[:data.size, k] = kernelConvolvedScene[(Mx / 2 + dx): -(Mx / 2 - dx), (My / 2 + dy): -(My / 2 - dy)].reshape(data.size)
+
+    # sky fitting
+    sceneMatrix[:data.size, psfParameterSize] = 1.
+
+    # L2 regularization
+    sceneMatrix[data.size:(data.size+psfParameterSize), :psfParameterSize] = l2norm * np.identity(psfParameterSize)
 
     # infer PSF and return
-    dataVector = data.reshape(data.size)
+    dataVector = np.append(data.reshape(data.size), np.zeros(psfParameterSize))
     if False: # l_bfgs_b method -- DOES NOT SEEM TO RESPECT BOUNDS!
         def cost(psf):
             return (np.sum((dataVector - psf[0] - np.dot(sceneMatrix, psf[1:]))**2),
@@ -104,9 +108,12 @@ def infer_psf(data, scene):
         newPsf = convolve(newPsfParameter[:0:-1].reshape(psfParameterShape), kernel, mode="full")
     if True: # levmar method
         def resid(lnpsf):
-            return dataVector - lnpsf[0] - np.dot(sceneMatrix, np.exp(lnpsf[1:]))
+            foo = np.exp(lnpsf) # exp psf amplitudes
+            foo[-1] = lnpsf[-1] # deal with sky
+            return dataVector - np.dot(sceneMatrix, foo)
         (newLnPsfParameter, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psfParameterSize + 1), full_output=True) # HARDCORE OPTIONS: xtol=0., ftol=0.
-        newPsf = convolve(np.exp(newLnPsfParameter[:0:-1]).reshape(psfParameterShape), kernel, mode="full")
+        newLnPsfParameter = newLnPsfParameter[:psfParameterSize] # drop sky
+        newPsf = convolve(np.exp(newLnPsfParameter[::-1]).reshape(psfParameterShape), kernel, mode="full")
     print "got PSF", newPsf.shape, np.min(newPsf), np.max(newPsf)
     return newPsf
 
@@ -189,7 +196,7 @@ def inference_step(data, scene, l2norm, plot=None):
     * `newPsf`: inferred PSF.
     * `newScene`: inferred scene.
     '''
-    newPsf = infer_psf(data, scene)
+    newPsf = infer_psf(data, scene, l2norm)
     newScene = infer_scene(data, newPsf, l2norm)
     if plot is not None:
         plot_inference_step(data, scene, newPsf, newScene, plot)
@@ -222,8 +229,17 @@ def plot_inference_step(data, scene, newPsf, newScene, filename):
     ax2.set_title(r"[inferred PSF] $\ast$ [previous scene]")
     my_plot(ax3, convolve(newScene, newPsf, mode="valid"))
     ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
-    plt.savefig(filename)
+    hogg_savefig(filename)
     return None
+
+def hogg_savefig(fn):
+    '''
+    # `hogg_savefig()`:
+
+    Hogg likes a verbose `savefig()`!
+    '''
+    print "writing %s" % fn
+    return plt.savefig(fn)
 
 def unit_tests():
     '''
@@ -283,22 +299,20 @@ def functional_tests():
 
 if __name__ == '__main__':
     unit_tests()
-    ## functional_tests()
+    functional_tests()
     import os
     from data import Image
     images = Image.get_all()
     hw = 11
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
-    print images[0].image
-    print images[0].image.shape
-    print images[0].image.size
     scene = convolve(psf, images[0].image, mode="full")
     try:
         os.makedirs("img")
     except os.error:
         pass
     for count, img in enumerate(images[1:]):
+        print "starting work on img", count
         data = img.image
         psf, newScene = inference_step(data, scene, 1.0, plot="img/%04d.png"%count)
         ndata = 2 + count
