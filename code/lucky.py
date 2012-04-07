@@ -3,7 +3,11 @@ This file is part of the Lucky Imaging project.
 
 issues:
 -------
-- l_bfgs_b non-negative optimization is FAILING
+- Needs to save the PSF and scene inferred from each image.
+- l_bfgs_b non-negative optimization is FAILING (derivative wrong?)
+- Ought to pass Jacobian to Lev-Mar.
+- Super slow on PSF estimation!
+- I think it memory leaks at least a bit (`Image`s don't get deleted?).
 
 """
 
@@ -218,18 +222,22 @@ def plot_inference_step(data, scene, newPsf, newScene, filename):
     ax5 = fig.add_subplot(235)
     ax6 = fig.add_subplot(236)
     my_plot = lambda ax, im: ax.imshow(im, cmap="gray", interpolation="nearest")
+    hw1 = (newPsf.shape[0] - 1) / 2
+    hw2 = (data.shape[0] - newPsf.shape[0] - 1) / 2
     my_plot(ax1, data)
     ax1.set_title("data")
-    my_plot(ax5, scene)
-    ax5.set_title("previous scene")
-    my_plot(ax4, newPsf)
-    ax4.set_title("inferred PSF")
-    my_plot(ax6, newScene)
-    ax6.set_title("inferred scene")
     my_plot(ax2, convolve(scene, newPsf, mode="valid"))
     ax2.set_title(r"[inferred PSF] $\ast$ [previous scene]")
     my_plot(ax3, convolve(newScene, newPsf, mode="valid"))
     ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
+    bigPsf = np.zeros_like(data)
+    bigPsf[hw2+1:-hw2,hw2+1:-hw2] = newPsf
+    my_plot(ax4, bigPsf)
+    ax4.set_title("inferred PSF (padded)")
+    my_plot(ax5, scene[hw1:-hw1,hw1:-hw1])
+    ax5.set_title("previous scene (cropped)")
+    my_plot(ax6, newScene[hw1:-hw1,hw1:-hw1])
+    ax6.set_title("inferred scene (cropped)")
     hogg_savefig(filename)
     return None
 
@@ -304,7 +312,7 @@ if __name__ == '__main__':
     import os
     from data import Image
     images = Image.get_all()
-    hw = 10
+    hw = 13
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
     scene = convolve(psf, images[0].image, mode="full")
@@ -315,6 +323,6 @@ if __name__ == '__main__':
     for count, img in enumerate(images[1:]):
         print "starting work on img", count
         data = img.image
-        psf, newScene = inference_step(data, scene, 1., plot="img/%04d.png"%count)
+        psf, newScene = inference_step(data, scene, (1. / 8.), plot="img/%04d.png"%count)
         ndata = 2 + count
         scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
