@@ -311,18 +311,20 @@ if __name__ == '__main__':
     ## functional_tests()
     import os
     from data import Image
-    images = Image.get_all()
+
     hw = 13
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
-    scene = convolve(psf, images[0].image, mode="full")
     try:
         os.makedirs("img")
     except os.error:
         pass
-    for count, img in enumerate(images[1:]):
-        print "starting work on img", count
-        data = img.image
-        psf, newScene = inference_step(data, scene, (1. / 8.), plot="img/%04d.png"%count)
-        ndata = 2 + count
-        scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
+    for count, img in enumerate(Image.get_all()):
+        if count == 0:
+            scene = convolve(psf, img.image, mode="full")
+        else:
+            print "starting work on img", count
+            data = img.image
+            psf, newScene = inference_step(data, scene, (1. / 8.), plot="img/%04d.png"%count)
+            ndata = 2 + count
+            scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene

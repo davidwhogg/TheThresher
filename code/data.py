@@ -8,7 +8,6 @@ Note: the filenames are currently _hard-coded_ for this particular project.
 __all__ = ["Image"]
 
 import os
-import re
 
 import numpy as np
 import pyfits
@@ -22,13 +21,14 @@ class Image(object):
     * `_id` (int): The
 
     """
-
-    _bp = os.environ.get("LUCKY_DATA",
-                "/data2/dfm/mars/bpl1m001-en07-20120304/unspooled")
-    _fn_format = "bpl1m001-en07-20120304-{0}-e00.fits"
-
-    def __init__(self, _id=None, fn=None):
+    def __init__(self, _id=None, fn=None,
+            bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled",
+            fn_format = "bpl1m001-en07-20120304-{0}-e00.fits"):
         assert _id is not None or fn is not None
+
+        self._bp = bp
+        self._fn_format = fn_format
+
         if fn is None:
             fn = self._fn_format.format("%04d"%_id)
         self.path = os.path.join(self._bp, fn)
@@ -42,11 +42,9 @@ class Image(object):
 
         """
         entries = os.listdir(cls._bp)
-        result = []
         for e in entries:
             if os.path.splitext(e)[1] == ".fits":
-                result.append(cls(fn=e))
-        return result
+                yield cls(fn=e)
 
     @property
     def image(self):
@@ -59,9 +57,6 @@ class Image(object):
         # Grab the image and header from the FITS file.
         data = np.array(f[0].data, dtype=float)
         self.info = {}
-        # The following is commented out because it doesn't work for Hogg on broiler.
-        #for k in f[0].header.keys():
-        #    self.info[k] = f[0].header[k]
         f.close()
 
         # Centroid and take an image section.
