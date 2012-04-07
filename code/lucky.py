@@ -333,7 +333,7 @@ if __name__ == '__main__':
     hw = 13
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
-    for count, img in enumerate(Image.get_all()):
+    for count, img in enumerate(Image.get_all(bp=bp)):
         if count == 0:
             scene = convolve(psf, img.image, mode="full")
         else:
