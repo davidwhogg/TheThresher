@@ -73,6 +73,12 @@ class Image(object):
         hw = 50
         self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
 
+        # re-scale flux values for no reason except to make the L2
+        # norm more interpretable.
+        rms = np.sqrt(np.mean((self._image - np.mean(self._image))**2))
+        self.info['rms'] = rms
+        self._image /= rms
+
         return self._image
 
     def __getitem__(self, s):

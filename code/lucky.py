@@ -111,7 +111,7 @@ def infer_psf(data, scene, l2norm):
             foo = np.exp(lnpsf) # exp psf amplitudes
             foo[-1] = lnpsf[-1] # deal with sky
             return dataVector - np.dot(sceneMatrix, foo)
-        (newLnPsfParameter, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psfParameterSize + 1), full_output=True) # HARDCORE OPTIONS: xtol=0., ftol=0.
+        (newLnPsfParameter, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psfParameterSize + 1), full_output=True, xtol=1.e-5, ftol=1e-5) # HARDCORE OPTIONS: xtol=0., ftol=0.
         newLnPsfParameter = newLnPsfParameter[:psfParameterSize] # drop sky
         newPsf = convolve(np.exp(newLnPsfParameter[::-1]).reshape(psfParameterShape), kernel, mode="full")
     print "got PSF", newPsf.shape, np.min(newPsf), np.max(newPsf)
@@ -315,6 +315,6 @@ if __name__ == '__main__':
     for count, img in enumerate(images[1:]):
         print "starting work on img", count
         data = img.image
-        psf, newScene = inference_step(data, scene, 0.01, plot="img/%04d.png"%count)
+        psf, newScene = inference_step(data, scene, 1., plot="img/%04d.png"%count)
         ndata = 2 + count
         scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
