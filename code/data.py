@@ -57,7 +57,6 @@ class Image(object):
         f = pyfits.open(self.path)
 
         # Grab the image and header from the FITS file.
-        w = 64
         data = np.array(f[0].data, dtype=float)
         self.info = {}
         # The following is commented out because it doesn't work for Hogg on broiler.

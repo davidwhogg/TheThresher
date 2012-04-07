@@ -4,9 +4,7 @@ This file is part of the Lucky Imaging project.
 issues:
 -------
 - l_bfgs_b non-negative optimization is FAILING
-- smoothness regularization for scene?
-- L2 regularization for PSF
-- L2 regularization for scene
+- L2 regularization for PSF -- IF YOU L2 the scene YOU MUST L2 the PSF -- duh!
 - weak regularization sum(PSF) ~= 1
 
 """
@@ -55,6 +53,9 @@ def infer_psf(data, scene):
     than the number of pixels implied by the number of free parameters
     (`psfParameterShape`).  That is, the PSF it is padded out, because
     of the aforementioned kernel.
+
+    Bug: There is a reversal (a `[:0:-1]`) in the code that is not
+    fully understood at present.
 
     ### input:
 
@@ -117,6 +118,10 @@ def infer_scene(data, psf, l2norm):
     this image given the PSF.  This code infers a sky level
     simultaneously.  That might seem like a detail, but it matters.
 
+    Bug: There is a reversal (a `[::-1]`) in the code that is not
+    fully understood at present.  A good guess is that it has
+    something to do with the `convolve()` operation.
+
     ### input:
 
     * `data`: An individual image.
@@ -136,7 +141,7 @@ def infer_scene(data, psf, l2norm):
 
     # build psf matrix from psf
     psfX, psfY = index2xy(psf.shape, np.arange(psf.size))
-    psfVector = psf.reshape(psf.size)
+    psfVector = psf.reshape(psf.size)[::-1] # HACK
     vals = np.zeros(data.size * psf.size)
     rows = np.zeros_like(vals).astype(int)
     cols = np.zeros_like(vals).astype(int)
@@ -147,28 +152,21 @@ def infer_scene(data, psf, l2norm):
         rows[s] = k
         cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
     # add entries for sky estimation
-    vals = np.append(vals, np.ones(data.size))
-    rows = np.append(rows, np.arange(data.size))
-    cols = np.append(cols, np.zeros(data.size) + sceneSize)
+    vals = np.append(vals, np.zeros(data.size))
+    rows = np.append(rows, np.arange(data.size).astype(int))
+    cols = np.append(cols, np.zeros(data.size).astype(int) + sceneSize)
     # add entries for L2 norm regularization
     vals = np.append(vals, np.zeros(sceneSize) + l2norm)
-    rows = np.append(rows, range(sceneSize))
-    cols = np.append(cols, range(sceneSize))
+    rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
+    cols = np.append(cols, np.arange(sceneSize))
     psfMatrix = csr_matrix((vals, (rows, cols)), shape=(data.size + sceneSize, sceneSize + 1))
-    print 'constructed psfMatrix'
+    print 'constructed psfMatrix:', min(rows), max(rows), data.size, sceneSize, min(cols), max(cols), sceneSize
 
     # infer scene and return
     dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
-    skyvec = np.zeros(data.size + sceneSize)
-    if True: # use sparse `lsqr`
-        (newScene, istop, niters, r1norm, r2norm, anorm, acond,
-         arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
-    if False: # use Lev-Mar `leastsq`
-        def sresid(scenepars):
-            skyvec[0 : data.size] = scenepars[0]
-            return dataVector - skyvec - psfMatrix * scenepars[1:]
-        (newScene, cov_x, infodict, mesg, ier) = op.leastsq(sresid, np.zeros(sceneSize + 1), full_output=True)
-        print ier, infodict['nfev']
+    skyVector = np.zeros(data.size + sceneSize)
+    (newScene, istop, niters, r1norm, r2norm, anorm, acond,
+     arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
     print "got scene", newScene.shape
     return newScene[:sceneSize].reshape(sceneShape)
 
@@ -203,21 +201,27 @@ def plot_inference_step(data, scene, newPsf, newScene, filename):
 
     Make plots for `inference_step()`.
     '''
-    fig = plt.figure(figsize=(10,10))
+    fig = plt.figure(figsize=(12,8))
     plt.clf()
-    ax1 = fig.add_subplot(221)
-    ax2 = fig.add_subplot(222)
-    ax3 = fig.add_subplot(223)
-    ax4 = fig.add_subplot(224)
+    ax1 = fig.add_subplot(231)
+    ax2 = fig.add_subplot(232)
+    ax3 = fig.add_subplot(233)
+    ax4 = fig.add_subplot(234)
+    ax5 = fig.add_subplot(235)
+    ax6 = fig.add_subplot(236)
     my_plot = lambda ax, im: ax.imshow(im, cmap="gray", interpolation="nearest")
     my_plot(ax1, data)
-    ax1.set_title("Data")
-    my_plot(ax2, scene)
-    ax2.set_title("Previous Scene")
-    my_plot(ax3, newPsf)
-    ax3.set_title("Inferred PSF")
-    my_plot(ax4, newScene)
-    ax4.set_title("Inferred Scene")
+    ax1.set_title("data")
+    my_plot(ax5, scene)
+    ax5.set_title("previous scene")
+    my_plot(ax4, newPsf)
+    ax4.set_title("inferred PSF")
+    my_plot(ax6, newScene)
+    ax6.set_title("inferred scene")
+    my_plot(ax2, convolve(scene, newPsf, mode="valid"))
+    ax2.set_title(r"[inferred PSF] $\ast$ [previous scene]")
+    my_plot(ax3, convolve(newScene, newPsf, mode="valid"))
+    ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
     plt.savefig(filename)
     return None
 
@@ -251,7 +255,7 @@ def unit_tests():
     newPsf, newScene = inference_step(data, scene, 0.001)
     print "psf:", newPsf.shape, np.min(newPsf), np.max(newPsf)
     print "scene:", newScene.shape, np.min(newScene), np.max(newScene)
-    # assert(np.all(newPsf >= 0)) WHY DOES THIS FAIL?
+    assert(np.all(newPsf >= 0)) # WHY DOES THIS FAIL FOR l_bfgs_b?
     assert(np.all(newPsf < 1.e-4))
     assert(np.all(newScene == 0))
     print 'unit_tests(): all tests passed'
@@ -264,67 +268,38 @@ def functional_tests():
     Run a set of functional tests.
     '''
     truescene = np.zeros((48, 48))
-    truescene[22, 26] = 1.
-    truepsf  = 1.  * np.exp(-0.5   * (((np.arange(15)-8)[:,None])**2 + ((np.arange(15)-4)[None,:])**2))
-    truepsf += 1.  * np.exp(-0.125 * (((np.arange(15)-6)[:,None])**2 + ((np.arange(15)-6)[None,:])**2))
-    truepsf += 2.  * np.exp(-0.5   * (((np.arange(15)-10)[:,None])**2 + ((np.arange(15)-10)[None,:])**2))
+    truescene[23, 26] = 1.
+    truepsf  = 1.  * np.exp(-0.5   * (((np.arange(17)-8)[:,None])**2 + ((np.arange(17)-5)[None,:])**2))
+    truepsf += 1.  * np.exp(-0.125 * (((np.arange(17)-6)[:,None])**2 + ((np.arange(17)-6)[None,:])**2))
+    truepsf += 2.  * np.exp(-0.5   * (((np.arange(17)-10)[:,None])**2 + ((np.arange(17)-10)[None,:])**2))
     truedata = convolve(truescene, truepsf, mode="valid")
-    data = truedata + 0.3 * np.random.normal(size=(truedata.shape))
-    newPsf, newScene = inference_step(data, truescene, 0.01, plot="functional01.png")
+    data = truedata + 0.03 * np.random.normal(size=(truedata.shape))
+    newPsf, newScene = inference_step(data, truescene, 1., plot="functional01.png")
     funkyscene = np.zeros((48, 48))
-    funkyscene[20:35,18:33] = truepsf
-    newPsf, newScene = inference_step(data, funkyscene, 0.01, plot="functional02.png")
+    funkyscene[15:32,15:32] = truepsf
+    newPsf, newScene = inference_step(data, funkyscene, 1., plot="functional02.png")
     print 'functional_tests(): all tests run (look at images to assess)'
     return None
 
 if __name__ == '__main__':
     unit_tests()
-    functional_tests()
+    ## functional_tests()
     import os
     from data import Image
-
     images = Image.get_all()
-
-    hw = 7
+    hw = 11
     psf = np.zeros((2*hw+1, 2*hw+1))
-
-    scene = images[0][hw:-hw, hw:-hw]
-
-    fig = plt.figure(figsize=(10,10))
-
-    bp = os.path.join(Image._bp, "img")
+    psf[hw,hw] = 1.
+    print images[0].image
+    print images[0].image.shape
+    print images[0].image.size
+    scene = convolve(psf, images[0].image, mode="full")
     try:
-        os.makedirs(bp)
+        os.makedirs("img")
     except os.error:
         pass
-
-    for count, img in enumerate(images):
+    for count, img in enumerate(images[1:]):
         data = img.image
-        psf, newScene = inference_step(data, psf, scene)
-
-        plt.clf()
-
-        ax1 = fig.add_subplot(221)
-        ax2 = fig.add_subplot(222)
-        ax3 = fig.add_subplot(223)
-        ax4 = fig.add_subplot(224)
-
-        my_plot = lambda ax, im: ax.imshow(im, cmap="gray", interpolation="nearest")
-
-        my_plot(ax1, data)
-        ax1.set_title("Data")
-
-        my_plot(ax2, scene)
-        ax2.set_title("Previous Scene")
-
-        my_plot(ax3, psf)
-        ax3.set_title("Inferred PSF")
-
-        my_plot(ax4, newScene)
-        ax4.set_title("Inferred Scene")
-
-        plt.savefig(os.path.join(bp, "%04d.png"%count))
-
-        ndata = 1 + count
+        psf, newScene = inference_step(data, scene, 1.0, plot="img/%04d.png"%count)
+        ndata = 2 + count
         scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
-
