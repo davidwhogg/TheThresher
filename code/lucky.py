@@ -307,24 +307,39 @@ def functional_tests():
     return None
 
 if __name__ == '__main__':
-    unit_tests()
-    ## functional_tests()
+    import sys
     import os
     from data import Image
+
+    if "--test" in sys.argv:
+        unit_tests()
+        ## functional_tests()
+
+    # Default data path to the Mars dataset.
+    bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled"
+    img_dir = "mars"
+    if "--binary" in sys.argv:
+        bp="/data2/dfm/lucky/binary"
+        img_dir = "binary"
+    if "--binary_short" in sys.argv:
+        bp="/data2/dfm/lucky/binary_short"
+        img_dir = "binary_short"
+
+    try:
+        os.makedirs(img_dir)
+    except os.error:
+        pass
 
     hw = 13
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
-    try:
-        os.makedirs("img")
-    except os.error:
-        pass
     for count, img in enumerate(Image.get_all()):
         if count == 0:
             scene = convolve(psf, img.image, mode="full")
         else:
             print "starting work on img", count
             data = img.image
-            psf, newScene = inference_step(data, scene, (1. / 8.), plot="img/%04d.png"%count)
+            psf, newScene = inference_step(data, scene, (1. / 8.),
+                    plot=os.path.join(img_dir, "%04d.png"%count))
             ndata = 2 + count
             scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
