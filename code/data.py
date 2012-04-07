@@ -22,29 +22,22 @@ class Image(object):
 
     """
     def __init__(self, _id=None, fn=None,
-            bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled",
-            fn_format = "bpl1m001-en07-20120304-{0}-e00.fits"):
-        assert _id is not None or fn is not None
-
-        self._bp = bp
-        self._fn_format = fn_format
-
-        if fn is None:
-            fn = self._fn_format.format("%04d"%_id)
-        self.path = os.path.join(self._bp, fn)
+            bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled"):
+        self._bp    = bp
+        self.path   = os.path.join(self._bp, fn)
         self._image = None
 
     @classmethod
-    def get_all(cls):
+    def get_all(cls, bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled"):
         """
         Get a list of `Image` objects for all of the FITS files in the base
         directory.
 
         """
-        entries = os.listdir(cls._bp)
+        entries = os.listdir(bp)
         for e in entries:
             if os.path.splitext(e)[1] == ".fits":
-                yield cls(fn=e)
+                yield cls(fn=e, bp=bp)
 
     @property
     def image(self):
