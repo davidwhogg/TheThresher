@@ -64,6 +64,8 @@ class Image(object):
             self.info['yc'] = yc
             hw = 50
             self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
+        else:
+            self._image = data
 
         # re-scale flux values for no reason except to make the L2
         # norm more interpretable.
