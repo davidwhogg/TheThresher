@@ -3,9 +3,9 @@ This file is part of the Lucky Imaging project.
 
 issues:
 -------
+- When I try passing jacobian to lev-mar, it doesn't work; I think this is because of the zeroes / infinities that come in near zero flux, but I don't know how to transform the problem to remove these.  And or I could be wrong.  -Hogg
 - Needs to save the PSF and scene inferred from each image.
 - l_bfgs_b non-negative optimization is FAILING (derivative wrong?)
-- Ought to pass Jacobian to Lev-Mar.
 - Super slow on PSF estimation!
 - I think it memory leaks at least a bit (`Image`s don't get deleted?).
 
@@ -41,7 +41,7 @@ def index2xy(shape, i):
     '''
     return ((i / shape[1]), (i % shape[1]))
 
-def infer_psf(data, scene, l2norm):
+def infer_psf(data, scene, l2norm, runUnitTest=False):
     '''
     # `infer_psf()`:
 
@@ -114,8 +114,29 @@ def infer_psf(data, scene, l2norm):
         def resid(lnpsf):
             foo = np.exp(lnpsf) # exp psf amplitudes
             foo[-1] = lnpsf[-1] # deal with sky
-            return dataVector - np.dot(sceneMatrix, foo)
-        (newLnPsfParameter, cov_x, infodict, mesg, ier) = op.leastsq(resid, np.zeros(psfParameterSize + 1), full_output=True, xtol=1.e-5, ftol=1e-5) # HARDCORE OPTIONS: xtol=0., ftol=0.
+            return np.dot(sceneMatrix, foo) - dataVector
+        def jacobian(lnpsf):
+            foo = np.exp(lnpsf) # exp psf amplitudes
+            foo[-1] = 1. # deal with sky
+            return sceneMatrix * foo[None,:]
+        def unit_test_jacobian(lnpsf):
+            delta = 1.e-4 # magic number
+            j0 = jacobian(lnpsf)
+            r0 = resid(lnpsf)
+            for k,p in enumerate(lnpsf):
+                l1 = 1. * lnpsf
+                l1[k] += delta
+                badness = (resid(l1) - r0) / delta - j0[:,k]
+                print k, badness
+                assert(np.all(badness**2 <= 1e-6 * j0[:,k]**2))
+        first_guess = np.zeros(psfParameterSize + 1)
+        if runUnitTest:
+            unit_test_jacobian(first_guess)
+            unit_test_jacobian(np.random.normal(size=first_guess.size))
+        # should add option `Dfun=jacobian` to the next line for speed, but if fails if I do. - Hogg
+        (newLnPsfParameter, cov_x, infodict, mesg, ier) = op.leastsq(resid, first_guess, full_output=True, xtol=1.e-5, ftol=1e-5) # HARDCORE OPTIONS: xtol=0., ftol=0.
+        if runUnitTest:
+            unit_test_jacobian(newLnPsfParameter)
         newLnPsfParameter = newLnPsfParameter[:psfParameterSize] # drop sky
         newPsf = convolve(np.exp(newLnPsfParameter[::-1]).reshape(psfParameterShape), kernel, mode="full")
     print "got PSF", newPsf.shape, np.min(newPsf), np.max(newPsf)
@@ -182,7 +203,7 @@ def infer_scene(data, psf, l2norm):
     print "got scene", newScene.shape, np.min(newScene), np.max(newScene)
     return newScene
 
-def inference_step(data, scene, l2norm, plot=None):
+def inference_step(data, scene, l2norm, plot=None, runUnitTest=False):
     '''
     # `inference_step()`:
 
@@ -201,7 +222,7 @@ def inference_step(data, scene, l2norm, plot=None):
     * `newPsf`: inferred PSF.
     * `newScene`: inferred scene.
     '''
-    newPsf = infer_psf(data, scene, l2norm)
+    newPsf = infer_psf(data, scene, l2norm, runUnitTest=runUnitTest)
     newScene = infer_scene(data, newPsf, l2norm)
     if plot is not None:
         plot_inference_step(data, scene, newPsf, newScene, plot)
@@ -277,7 +298,7 @@ def unit_tests():
     data = np.zeros((50, 50))
     scene = np.zeros((64, 64))
     scene[48, 48] = 1.
-    newPsf, newScene = inference_step(data, scene, 0.001)
+    newPsf, newScene = inference_step(data, scene, 0.001, runUnitTest=True)
     print "psf:", newPsf.shape, np.min(newPsf), np.max(newPsf)
     print "scene:", newScene.shape, np.min(newScene), np.max(newScene)
     assert(np.all(newPsf >= 0)) # WHY DOES THIS FAIL FOR l_bfgs_b?
@@ -323,6 +344,6 @@ if __name__ == '__main__':
     for count, img in enumerate(images[1:]):
         print "starting work on img", count
         data = img.image
-        psf, newScene = inference_step(data, scene, (1. / 8.), plot="img/%04d.png"%count)
+        psf, newScene = inference_step(data, scene, (1. / 128.), plot="img/%04d.png"%count)
         ndata = 2 + count
         scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
