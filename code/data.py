@@ -40,7 +40,9 @@ class Image(object):
         entries = os.listdir(bp)
         for e in entries:
             if os.path.splitext(e)[1] == ".fits":
-                yield cls(fn=e, bp=bp, center=center)
+                o = cls(fn=e, bp=bp, center=center)
+                yield o
+                del o
 
     @property
     def image(self):
