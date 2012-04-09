@@ -29,6 +29,9 @@ class Image(object):
         self._image = None
         self._center = center
 
+    def _clear(self):
+        del self._image
+
     @classmethod
     def get_all(cls, bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled",
             center=False):
@@ -42,6 +45,7 @@ class Image(object):
             if os.path.splitext(e)[1] == ".fits":
                 o = cls(fn=e, bp=bp, center=center)
                 yield o
+                o._clear()
                 del o
 
     @property
