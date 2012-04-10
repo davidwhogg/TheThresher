@@ -387,7 +387,7 @@ if __name__ == '__main__':
             xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
             print count, xc, yc
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
-            psf, newScene = inference_step(data, scene, (1. / 128.),
+            psf, newScene = inference_step(data, scene, (1. / 8.),
                     plot=os.path.join(img_dir, "%04d.png"%count))
             ndata = 1 + count
             scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
