@@ -369,13 +369,25 @@ if __name__ == '__main__':
     hw = 13
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
+    border = 25
+    size = 100
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         if count == 0:
-            scene = convolve(psf, img.image, mode="full")
+            bigdata = 1. * img.image
+            data = bigdata[border : border + size, border : border + size]
+            scene = convolve(data, psf, mode="full")
+            foo = convolve(scene, bigdata, mode="valid")
+            mi = np.argmax(foo)
+            x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
+            scene = convolve(data, psf, mode="full")
         else:
             print "starting work on img", count
-            data = img.image
-            psf, newScene = inference_step(data, scene, (1. / 8.),
+            bigdata = 1. * img.image
+            mi = np.argmax(convolve(scene, bigdata, mode="valid"))
+            xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
+            print count, xc, yc
+            data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
+            psf, newScene = inference_step(data, scene, (1. / 128.),
                     plot=os.path.join(img_dir, "%04d.png"%count))
-            ndata = 2 + count
+            ndata = 1 + count
             scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene

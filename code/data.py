@@ -61,7 +61,7 @@ class Image(object):
         self.info = {}
         f.close()
 
-        hw = 50
+        hw = 25
         if self._center:
             # Centroid and take an image section.
             s = np.sum(data)
