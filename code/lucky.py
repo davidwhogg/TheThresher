@@ -11,7 +11,8 @@ issues:
 
 notes:
 ------
-- The L-BFGS-B implementation we are using comes with a citation requirement; see `l_bfgs_b` documentation.
+- The L-BFGS-B implementation we are NOT using comes with a citation requirement; see `l_bfgs_b` documentation.
+- Same might be true for the NNLS implementation.
 
 """
 
@@ -214,7 +215,7 @@ def infer_scene(data, psf, l2norm):
     print "got scene", newScene.shape, np.min(newScene), np.max(newScene)
     return newScene
 
-def inference_step(data, scene, l2norm, plot=None, runUnitTest=False):
+def inference_step(data, scene, psfL2norm, sceneL2norm, plot=None, runUnitTest=False):
     '''
     # `inference_step()`:
 
@@ -233,8 +234,8 @@ def inference_step(data, scene, l2norm, plot=None, runUnitTest=False):
     * `newPsf`: inferred PSF.
     * `newScene`: inferred scene.
     '''
-    newPsf = infer_psf(data, scene, l2norm, runUnitTest=runUnitTest)
-    newScene = infer_scene(data, newPsf, l2norm)
+    newPsf = infer_psf(data, scene, psfL2norm, runUnitTest=runUnitTest)
+    newScene = infer_scene(data, newPsf, sceneL2norm)
     if plot is not None:
         plot_inference_step(data, scene, newPsf, newScene, plot)
     return newPsf, newScene
@@ -387,7 +388,7 @@ if __name__ == '__main__':
             xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
             print count, xc, yc
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
-            psf, newScene = inference_step(data, scene, (1. / 8.),
-                    plot=os.path.join(img_dir, "%04d.png"%count))
             ndata = 1 + count
+            psf, newScene = inference_step(data, scene, 1., (1. / float(ndata)),
+                    plot=os.path.join(img_dir, "%04d.png"%count))
             scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
