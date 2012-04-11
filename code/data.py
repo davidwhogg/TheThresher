@@ -61,17 +61,18 @@ class Image(object):
         self.info = {}
         f.close()
 
-        hw = 25
+        hw = 31
         if self._center:
             # Centroid and take an image section.
             s = np.sum(data)
             xc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=1)) / s))
             yc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=0)) / s))
-            self.info['xc'] = xc
-            self.info['yc'] = yc
-            self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
         else:
-            self._image = data[hw:-hw, hw:-hw]
+            xc = data.shape[0] / 2
+            yc = data.shape[1] / 2
+        self.info['xc'] = xc
+        self.info['yc'] = yc
+        self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
 
         # re-scale flux values for no reason except to make the L2
         # norm more interpretable.

@@ -97,7 +97,7 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
         dx, dy = index2xy(psfParameterShape, k)
         dx -= Qx / 2
         dy -= Qx / 2
-        sceneMatrix[:data.size, k] = kernelConvolvedScene[(Mx / 2 + dx): -(Mx / 2 - dx), (My / 2 + dy): -(My / 2 - dy)].reshape(data.size)
+        sceneMatrix[:data.size, k] = kernelConvolvedScene[(Mx / 2 + dx): (Mx / 2 + dx + Px), (My / 2 + dy): (My / 2 + dy + Py)].reshape(data.size)
 
     # sky fitting
     sceneMatrix[:data.size, psfParameterSize] = 1.
@@ -208,8 +208,11 @@ def infer_scene(data, psf, l2norm):
     # infer scene and return
     dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
     skyVector = np.zeros(data.size + sceneSize)
-    (newScene, istop, niters, r1norm, r2norm, anorm, acond,
-     arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
+    if False:
+        newScene, rnorm = op.nnls(psfMatrix.todense(), dataVector)
+    if True:
+        (newScene, istop, niters, r1norm, r2norm, anorm, acond,
+         arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
     newScene = newScene[:sceneSize].reshape(sceneShape)
     print "got scene", newScene.shape, np.min(newScene), np.max(newScene)
     return newScene
@@ -263,7 +266,8 @@ def plot_inference_step(data, scene, newPsf, newScene, filename):
     my_plot(ax3, convolve(newScene, newPsf, mode="valid"))
     ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
     bigPsf = np.zeros_like(data)
-    bigPsf[hw2+1:-hw2,hw2+1:-hw2] = newPsf
+    print bigPsf.shape, hw2, newPsf.shape
+    bigPsf[hw2:hw2+newPsf.shape[0],hw2:hw2+newPsf.shape[1]] = newPsf
     my_plot(ax4, bigPsf)
     ax4.set_title("inferred PSF (padded)")
     my_plot(ax5, scene[hw1:-hw1,hw1:-hw1])
