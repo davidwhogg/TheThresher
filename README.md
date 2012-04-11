@@ -1,5 +1,8 @@
 # Lucky Imaging
 
+While we recognize that you have other options available for your
+lucky-imaging solution needs, We Don't Throw Away Data (tm).
+
 ### Authors
 
 - David W. Hogg, New York University
