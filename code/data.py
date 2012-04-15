@@ -54,6 +54,7 @@ class Image(object):
         if self._image is not None:
             return self._image
 
+        print ".image(): reading %s" % self.path
         f = pyfits.open(self.path)
 
         # Grab the image and header from the FITS file.

@@ -394,6 +394,7 @@ if __name__ == '__main__':
             assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
             mi = np.argmax(convolve(bigdata, scene, mode="valid"))
             xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
+            print "got centroid shift", (xc, yc)
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
             if data.shape[0] != data.shape[1]:
                 print xc, yc, x0, y0, border, size, bigdata.shape
