@@ -400,7 +400,7 @@ if __name__ == '__main__':
                 print xc, yc, x0, y0, border, size, bigdata.shape
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             ndata = 1 + count
-            psf, newScene = inference_step(data, scene, 1., (1. / float(ndata)),
+            psf, newScene = inference_step(data, scene, 2., (1. / 4.),
                     plot=os.path.join(img_dir, "%04d.png"%count))
             print "newScene", newScene.shape
             scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
