@@ -359,6 +359,7 @@ if __name__ == '__main__':
     center = True
     if "--binary" in sys.argv:
         bp="/data2/dfm/lucky/binary"
+        # bp="../data-binary/"
         img_dir = "binary"
         center = False
     if "--binary_short" in sys.argv:
@@ -374,25 +375,31 @@ if __name__ == '__main__':
     hw = 13
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
-    border = 25
     size = 100
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         if count == 0:
             bigdata = 1. * img.image
+            border = (bigdata.shape[0] - size) / 2
             data = bigdata[border : border + size, border : border + size]
+            dataShape = data.shape
+            assert(dataShape[0] == dataShape[1])
             scene = convolve(data, psf, mode="full")
-            foo = convolve(scene, bigdata, mode="valid")
+            foo = convolve(bigdata, scene, mode="valid")
             mi = np.argmax(foo)
             x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
             scene = convolve(data, psf, mode="full")
         else:
-            print "starting work on img", count
             bigdata = 1. * img.image
-            mi = np.argmax(convolve(scene, bigdata, mode="valid"))
+            assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
+            assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
+            mi = np.argmax(convolve(bigdata, scene, mode="valid"))
             xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
-            print count, xc, yc
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
+            if data.shape[0] != data.shape[1]:
+                print xc, yc, x0, y0, border, size, bigdata.shape
+            assert(data.shape == dataShape) # if this isn't true then some edges got hit
             ndata = 1 + count
             psf, newScene = inference_step(data, scene, 2., (1. / 4.),
                     plot=os.path.join(img_dir, "%04d.png"%count))
+            print "newScene", newScene.shape
             scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
