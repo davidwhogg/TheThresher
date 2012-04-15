@@ -393,6 +393,6 @@ if __name__ == '__main__':
             print count, xc, yc
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
             ndata = 1 + count
-            psf, newScene = inference_step(data, scene, 1., (1. / float(ndata)),
+            psf, newScene = inference_step(data, scene, 2., (1. / 4.),
                     plot=os.path.join(img_dir, "%04d.png"%count))
             scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
