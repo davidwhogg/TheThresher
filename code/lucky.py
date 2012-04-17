@@ -3,6 +3,7 @@ This file is part of the Lucky Imaging project.
 
 issues:
 -------
+- The infer functions ought to take weight vectors -- this would permit dropping data for cross-validation tests and also inclusion of an error model.
 - When I try passing jacobian to lev-mar, it doesn't work; I think this is because of the zeroes / infinities that come in near zero flux, but I don't know how to transform the problem to remove these.  And or I could be wrong.  -Hogg
 - Needs to save the PSF and scene inferred from each image.
 - l_bfgs_b non-negative optimization is FAILING (derivative wrong?)
@@ -354,12 +355,11 @@ if __name__ == '__main__':
         ## functional_tests()
 
     # Default data path to the Mars dataset.
-    bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled"
+    bp= os.getenv("LUCKY_DATA", "/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled")
     img_dir = "mars"
     center = True
     if "--binary" in sys.argv:
-        bp="/data2/dfm/lucky/binary"
-        # bp="../data-binary/"
+        bp= os.getenv("BINARY_DATA", "/data2/dfm/lucky/binary")
         img_dir = "binary"
         center = False
     if "--binary_short" in sys.argv:
@@ -400,7 +400,7 @@ if __name__ == '__main__':
                 print xc, yc, x0, y0, border, size, bigdata.shape
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             ndata = 1 + count
-            psf, newScene = inference_step(data, scene, 2., (1. / 4.),
+            psf, newScene = inference_step(data, scene, (1. / 32.), (1. / 8.),
                     plot=os.path.join(img_dir, "%04d.png"%count))
             print "newScene", newScene.shape
             scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
