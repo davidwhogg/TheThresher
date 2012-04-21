@@ -178,6 +178,7 @@ def infer_scene(data, psf, l2norm):
     * `scene`
     '''
     # deal with all the size and shape setup
+    assert(l2norm > 0.)
     Px, Py = data.shape
     Mx, My = psf.shape
     Nx, Ny = (Px + Mx - 1, Py + My - 1)
@@ -219,27 +220,44 @@ def infer_scene(data, psf, l2norm):
     print "got scene", newScene.shape, np.min(newScene), np.max(newScene)
     return newScene
 
-def inference_step(data, scene, psfL2norm, sceneL2norm, plot=None, runUnitTest=False):
+def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, plot=None, runUnitTest=False):
     '''
     # `inference_step()`:
 
-    Concatenation of `infer_psf()` and `infer_scene()`.
+    Concatenation of `infer_psf()` and `infer_scene()`.  Applies
+    `alpha` times the newly inferred scene to `(1. - alpha)` times the
+    old scene.  Possibly also regularizes with L2norm and
+    non-negativity.
 
     ### inputs:
 
     * `data`: Image data
-    * `scene`: First guess at scene, must be (substantially) larger
-      than data image.
-    * `l2norm`: Amplitude of L2 regularization; units TBA.
+    * `oldScene`: First guess at scene, or scene from previous
+      iteration; must be (substantially) larger than data image.
+    * `alpha`: fraction of a full step to take; should be something
+      like `1./nIteration`.
+    * `psfl2norm`: Amplitude of L2 regularization for PSF; units TBA.
+    * `scenel2norm`: Amplitude of L2 regularization for scene; units
+      TBA.
+    * `nonNegative`: If `True`, apply non-negative clip.  Harsh!.
     * `plot`: If not `None`, make a standard plot with this name.
+    * `runUnitTest`: If `True`, pass forward unit test requests to
+      sub-functions.
 
     ### outputs:
 
     * `newPsf`: inferred PSF.
-    * `newScene`: inferred scene.
+    * `newScene`: updated scene.
     '''
-    newPsf = infer_psf(data, scene, psfL2norm, runUnitTest=runUnitTest)
-    newScene = infer_scene(data, newPsf, sceneL2norm)
+    newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
+    thisScene = infer_scene(data, newPsf, sceneL2norm)
+    print "updating with", alpha, psfL2norm, sceneL2norm, nonNegative
+    assert(alpha > 0.)
+    assert(alpha <= 1.)
+    newScene = (1. - alpha) * oldScene + alpha * thisScene
+    if nonNegative: # this is brutal
+        newScene = np.clip(newScene, 0.0, np.Inf)
+        print 'clipped scene:', np.min(newScene), np.max(newScene)
     if plot is not None:
         plot_inference_step(data, scene, newPsf, newScene, plot)
     return newPsf, newScene
@@ -275,7 +293,7 @@ def plot_inference_step(data, scene, newPsf, newScene, filename):
     my_plot(ax5, scene[hw1:-hw1,hw1:-hw1])
     ax5.set_title("previous scene (cropped)")
     my_plot(ax6, newScene[hw1:-hw1,hw1:-hw1])
-    ax6.set_title("inferred scene (cropped)")
+    ax6.set_title("updated scene (cropped)")
     hogg_savefig(filename)
     return None
 
@@ -376,6 +394,7 @@ if __name__ == '__main__':
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
     size = 100
+    # do the full inference
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         if count == 0:
             bigdata = 1. * img.image
@@ -388,6 +407,7 @@ if __name__ == '__main__':
             mi = np.argmax(foo)
             x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
             scene = convolve(data, psf, mode="full")
+            scene = np.clip(scene, 0.0, np.Inf)
         else:
             bigdata = 1. * img.image
             assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
@@ -399,8 +419,24 @@ if __name__ == '__main__':
             if data.shape[0] != data.shape[1]:
                 print xc, yc, x0, y0, border, size, bigdata.shape
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
-            ndata = 1 + count
-            psf, newScene = inference_step(data, scene, (1. / 32.), (1. / 8.),
-                    plot=os.path.join(img_dir, "%04d.png"%count))
-            print "newScene", newScene.shape
-            scene = ((ndata - 1.) / ndata) * scene + (1. / ndata) * newScene
+            alpha = 1. / (1. + float(count))
+            psf, scene = inference_step(data, scene, alpha,
+                                        0., 1./32., True,
+                                        plot=os.path.join(img_dir, "%04d.png"%count))
+            if count == 8:
+                break
+    # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
+    for count, img in enumerate(Image.get_all(bp=bp, center=center)):
+        bigdata = 1. * img.image
+        assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
+        assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
+        mi = np.argmax(convolve(bigdata, scene, mode="valid"))
+        xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
+        print "got centroid shift", count, (xc, yc)
+        data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
+        if data.shape[0] != data.shape[1]:
+            print xc, yc, x0, y0, border, size, bigdata.shape
+            assert(data.shape == dataShape) # if this isn't true then some edges got hit
+        psf, scene = inference_step(data, scene, alpha,
+                                    0., 1./32., False,
+                                    plot=os.path.join(img_dir, "pass2_%04d.png"%count))
