@@ -3,11 +3,11 @@ This file is part of the Lucky Imaging project.
 
 issues:
 -------
+- Ought to pickle on the fly so as not to repeat labor when re-run?
 - The infer functions ought to take weight vectors -- this would permit dropping data for cross-validation tests and also inclusion of an error model.
 - When I try passing jacobian to lev-mar, it doesn't work; I think this is because of the zeroes / infinities that come in near zero flux, but I don't know how to transform the problem to remove these.  And or I could be wrong.  -Hogg
 - Needs to save the PSF and scene inferred from each image.
 - l_bfgs_b non-negative optimization is FAILING (derivative wrong?)
-- Super slow on PSF estimation!
 - I think it memory leaks at least a bit (`Image`s don't get deleted?).
 
 notes:
@@ -423,8 +423,6 @@ if __name__ == '__main__':
             psf, scene = inference_step(data, scene, alpha,
                                         0., 1./32., True,
                                         plot=os.path.join(img_dir, "%04d.png"%count))
-            if count == 8:
-                break
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         bigdata = 1. * img.image
