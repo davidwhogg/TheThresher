@@ -416,9 +416,9 @@ if __name__ == '__main__':
             assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
             assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
             mi = np.argmax(convolve(bigdata, scene, mode="valid"))
-            xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
+            xc, yc = x0 - mi / foo.shape[1], y0 - (mi % foo.shape[1])
             print "got centroid shift", (xc, yc)
-            data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
+            data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size] # this line isn't quite right?
             if data.shape[0] != data.shape[1]:
                 print xc, yc, x0, y0, border, size, bigdata.shape
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
@@ -435,7 +435,7 @@ if __name__ == '__main__':
             assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
             assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
             mi = np.argmax(convolve(bigdata, scene, mode="valid"))
-            xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
+            xc, yc = x0 - mi / foo.shape[1], y0 - (mi % foo.shape[1])
             print "got centroid shift", count, (xc, yc)
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
             if data.shape[0] != data.shape[1]:
