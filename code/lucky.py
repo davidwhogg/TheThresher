@@ -5,6 +5,7 @@ issues:
 -------
 - Ought to pickle on the fly so as not to repeat labor when re-run?
 - The infer functions ought to take weight vectors -- this would permit dropping data for cross-validation tests and also inclusion of an error model.
+- Centroiding does *not* seem to be working very well.  It is stupid-heuristic.
 - When I try passing jacobian to lev-mar, it doesn't work; I think this is because of the zeroes / infinities that come in near zero flux, but I don't know how to transform the problem to remove these.  And or I could be wrong.  -Hogg
 - Needs to save the PSF and scene inferred from each image.
 - l_bfgs_b non-negative optimization is FAILING (derivative wrong?)
@@ -373,15 +374,15 @@ if __name__ == '__main__':
         ## functional_tests()
 
     # Default data path to the Mars dataset.
-    bp= os.getenv("LUCKY_DATA", "/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled")
+    bp = os.getenv("LUCKY_DATA", "/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled")
     img_dir = "mars"
     center = True
     if "--binary" in sys.argv:
-        bp= os.getenv("BINARY_DATA", "/data2/dfm/lucky/binary")
+        bp = os.getenv("BINARY_DATA", "/data2/dfm/lucky/binary")
         img_dir = "binary"
         center = False
     if "--binary_short" in sys.argv:
-        bp="/data2/dfm/lucky/binary_short"
+        bp = "/data2/dfm/lucky/binary_short"
         img_dir = "binary_short"
         center = False
 
@@ -398,6 +399,7 @@ if __name__ == '__main__':
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         if count == 0:
             bigdata = 1. * img.image
+            img._image = None # clear space?
             border = (bigdata.shape[0] - size) / 2
             data = bigdata[border : border + size, border : border + size]
             dataShape = data.shape
@@ -410,6 +412,7 @@ if __name__ == '__main__':
             scene = np.clip(scene, 0.0, np.Inf)
         else:
             bigdata = 1. * img.image
+            img._image = None # clear space?
             assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
             assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
             mi = np.argmax(convolve(bigdata, scene, mode="valid"))
@@ -421,20 +424,29 @@ if __name__ == '__main__':
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             alpha = 1. / (1. + float(count))
             psf, scene = inference_step(data, scene, alpha,
-                                        0., 1./32., True,
-                                        plot=os.path.join(img_dir, "%04d.png"%count))
+                                        1., 1./32., True,
+                                        plot=os.path.join(img_dir, "%04d.png" % count))
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
-    for count, img in enumerate(Image.get_all(bp=bp, center=center)):
-        bigdata = 1. * img.image
-        assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
-        assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
-        mi = np.argmax(convolve(bigdata, scene, mode="valid"))
-        xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
-        print "got centroid shift", count, (xc, yc)
-        data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
-        if data.shape[0] != data.shape[1]:
-            print xc, yc, x0, y0, border, size, bigdata.shape
-            assert(data.shape == dataShape) # if this isn't true then some edges got hit
-        psf, scene = inference_step(data, scene, alpha,
-                                    0., 1./32., False,
-                                    plot=os.path.join(img_dir, "pass2_%04d.png"%count))
+    for pindex in (2, 3, 4, 5):
+        alpha = 2. * alpha
+        for count, img in enumerate(Image.get_all(bp=bp, center=center)):
+            bigdata = 1. * img.image
+            img._image = None # clear space?
+            assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
+            assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
+            mi = np.argmax(convolve(bigdata, scene, mode="valid"))
+            xc, yc = mi / foo.shape[1] - x0, mi % foo.shape[1] - y0
+            print "got centroid shift", count, (xc, yc)
+            data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
+            if data.shape[0] != data.shape[1]:
+                print xc, yc, x0, y0, border, size, bigdata.shape
+                assert(data.shape == dataShape) # if this isn't true then some edges got hit
+            psf, scene = inference_step(data, scene, alpha,
+                                        1., 1./32., False,
+                                        plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
+
+'''
+# notes:
+- on 2012-04-21 ran with (0., 1./32., True) and then (0., 1./32., False) on 130 images and got reasonable results but some structure around the stars
+- on 2012-04-21 running with (1., 1./32., True) and then (1., 1/32., False) on 130 images...
+'''
