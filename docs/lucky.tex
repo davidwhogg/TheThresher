@@ -1,0 +1,155 @@
+\documentclass[12pt,preprint]{aastex}
+
+\newcounter{address}
+\setcounter{address}{0}
+\newcommand{\foreign}[1]{\textit{#1}}
+\newcommand{\etal}{\foreign{et~al.}}
+\newcommand{\project}[1]{\textsl{#1}}
+\newcommand{\LCOGT}{\project{LCOGT}}
+\newcommand{\documentname}{\textsl{Article}}
+
+\title{Lucky imaging without the terrible, \emph{terrible} waste\\
+       \textit{or}\\
+       Don't throw away data!}
+\author{
+  David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA},\ref{email}},
+  Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP}},
+  Federica Bianco\altaffilmark{\ref{CCPP},\ref{LCOGT}}
+}
+
+\setcounter{address}{1}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{CCPP} Center
+  for Cosmology and Particle Physics, Department of Physics, New York
+  University, 4 Washington Place, New York, NY 10003}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{MPIA}
+  Max-Planck-Institut f\"ur Astronomie, K\"onigstuhl 17, D-69117
+  Heidelberg, Germany}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{email} To whom
+  correspondence should be addressed: \texttt{david.hogg@nyu.edu}}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{LCOGT}
+  \LCOGT, UCSB, or whatever}
+
+\begin{abstract}
+We present a new method---and a new data-processing pipeline---for
+working with Lucky Imaging data, in which high-resolution images are
+obtained by combining very large numbers of short exposures under a
+variable point-spread-function-distorting atmosphere.  The method is
+based on previous work on multi-frame deconvolution; it is novel
+because it does \emph{not} involve discarding any data whatsoever.
+The method works by extracting information about the scene from every
+image, no matter what that image's PSF.  We demonstrate the method on
+data taken with the \LCOGT\ lucky imaging system.
+\end{abstract}
+
+\begin{document}
+
+\section{Introduction}
+
+...What is lucky imaging traditionally and what are the benefits and costs?..
+
+...What is speckle imaging and it's poor cousin shift-and-add?..
+
+...Why is it that a Real Scientist (TM) commits to Never Throw Away Data (TM)?..
+
+\section{Imaging generalities}
+
+From our perspective, an image read out by a real camera (with, say,
+square pixels in a focal-plane array) is a noisy sampling of the
+intensity field, convolved with some kind of point-spread function.
+Importantly, if you want to think of the image as a pure
+\emph{sampling} of a convolved intensity field---and trust us, you
+do---then the point-spread function that convolves the intensity field
+should be not the pure atmospheric PSF, nor even the
+instrument-convolved atmospheric PSF.  It should be the
+\emph{pixel-convoved} PSF \emph{at the focal plane}.  From here on,
+whenever we mention or use the PSF, we mean \emph{always} the
+pixel-convolved PSF at the focal plane.  This choice may seem strange,
+but when this pixel-convolved PSF is used, the pixel values are
+delta-function samples of the convolved intensity field, reducing
+enormously synthetic-image computation.  Furthermore, if the
+non-pixel-convolved PSF is smooth and well-sampled, the
+pixel-conovolved PSF is \emph{also} smooth, so there is no significant
+numerical losses or approximations incurred by making this choice.
+
+It pains us to point out that the PSF, as it is usually conceived, is
+actually \emph{correlated} not \emph{convolved} with the true scene.
+That is a choice about what the PSF is.  In what follows we will use
+the word ``convolve'' in conformity with usual practice in astronomy,
+but the way we show the PSFs in the figures, it is probably
+``correlate'' that we are really doing.
+
+To make our ideas about imaging concrete, we can represent the model
+that will be used throughout this paper for imaging data as a
+convolution
+\begin{eqnarray}\displaystyle
+D_n &=& \psi \ast I + E
+\quad ,
+\end{eqnarray}
+where $D_n$ is the noisy $M$-pixel image data, $\psi$ is the
+pixel-convolved PSF, $\ast$ represents the convolution operation, $I$
+is the intensity field above the atmosphere, and $E$ is the noise
+contribution to the image data.  Convolution is a linear operation,
+so, following \citet{hirsch}, we can write the model in two equivalent
+ways:
+\begin{eqnarray}\displaystyle
+d_n &=& P_n \cdot s + e
+\\
+d_n &=& S \cdot p_n + e
+\quad ,
+\end{eqnarray}
+where now $d_n$ is the original data image $D_n$ reformatted as a
+one-dimensional length-$M$ column vector, $P_n$ is a $W\times M$
+sparse matrix that contains $K$ independent values representing the
+point-spread function on a frighteningly reformatted pixel grid, $s$
+is a length-$W$ column vector representing the true scene, $e$ is a
+length-$M$ column vector of noise constributions, $S$ is a $K\times M$
+sparse matrix that contains $W$ independent values representing the
+true scene also frighteningly reformatted, and $p_n$ is a length-$K$
+column vector representing the PSF.  The idea is that if the image
+data are unwrapped into a one-dimensional vector, the linear
+convolution operation can always be represented as a matrix operation
+acting on another vector, and there is a choice of whether to see the
+PSF as the matrix and the scene as the vector, or vice versa.  Not
+obvious?  Think about it!
+
+...Should we say some words here about why it is a bit dangerous to be thinking about the \emph{true scene}?..
+
+Now, with an error model---a probabilistic description of how the $E$
+image (or equivalently, $e$ vector) is generated---we can write down a
+likelihood function or a probability for the data $D_n$ (or
+equivalently $d_n$) given the model parameters $p_n$ and $s$.  With
+some priors, we can even in principle write down a posterior
+probability distribution function over true scenes $s$ and PSFs $p_n$
+given the data, which we will think of as being a set of similar
+(though different) images $D_n$.  This posterior PDF can even be
+\emph{marginalized} over all possible PSFs to leave us with a
+marginalized posterior PDF for just the true scene $s$.  That would be
+just about the best we could possibly do in this problem, for very
+general reasons.
+
+...Why we can't represent the posterior PDF, at least for now...
+
+...How regularization and optimization is related to the prior PDF and posterior PDF...
+
+...How, in general, are we going to proceed; why is online useful...
+
+\section{The method and pipeline}
+
+\section{Experiments and results}
+
+\section{Discussion}
+
+\acknowledgements It is a pleasure to thank Stefan Harmeling
+(T\"ubingen), Michael Hirsch (UCL), and Bernhard Sch\"olkopf
+(T\"ubingen) for introducing us to the ideas in \citet{hirsch}; many
+of the technical ideas in this \documentname\ come from their work.
+We also single out Dustin Lang and Robert Lupton for special thanks;
+DWH wouldn't understand anything about imaging if it weren't for the
+many years of discussions.
+
+\begin{thebibliography}{70}
+\bibitem[Hirsch \etal(2011)]{hirsch}
+Hirsch,~M., Harmeling,~S., Sra,~S., Sch\"olkopf,~B., 2011, \aap, 531, A9
+\end{thebibliography}
+
+\end{document}
