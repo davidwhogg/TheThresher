@@ -5,6 +5,7 @@
 *.pyc
 .DS_Store
 data
+data-binary
 venv
 nohup.out
 lucky.pdf
