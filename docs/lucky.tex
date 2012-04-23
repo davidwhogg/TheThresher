@@ -8,6 +8,9 @@
 \newcommand{\LCOGT}{\project{LCOGT}}
 \newcommand{\documentname}{\textsl{Article}}
 
+\newcommand{\given}{\,|\,}
+\newcommand{\transpose}[1]{{#1}^{\mathsf{T}}}
+
 \title{Lucky imaging without the terrible, \emph{terrible} waste\\
        \textit{or}\\
        Don't throw away data!}
@@ -34,7 +37,7 @@ We present a new method---and a new data-processing pipeline---for
 working with Lucky Imaging data, in which high-resolution images are
 obtained by combining very large numbers of short exposures under a
 variable point-spread-function-distorting atmosphere.  The method is
-based on previous work on multi-frame deconvolution; it is novel
+based on previous work on multi-frame deconvolution; it is valuable
 because it does \emph{not} involve discarding any data whatsoever.
 The method works by extracting information about the scene from every
 image, no matter what that image's PSF.  We demonstrate the method on
@@ -142,7 +145,23 @@ when interferometric data are ``cleaned''.
 Now, with an error model---a probabilistic description of how the
 $E_n$ image (or equivalently, $e_n$ vector) is generated---we can
 write down a likelihood function or a probability for the data $D_n$
-(or equivalently $d_n$) given the model parameters $p_n$ and $s$.
+(or equivalently $d_n$) given the model parameters $p_n$ and $s$.  For
+example, if the $M$ per-pixel noise contributions are (independently)
+drawn from Gaussians with zero means then this likelihood has the
+incredibly simple form
+\begin{eqnarray}\displaystyle
+\ln p(D_n\given p_n, s) &=& Q - \frac{1}{2}\,\chi^2_n
+\\
+\chi^2_n &\equiv& \transpose{[d_n - P_n \cdot s]} \cdot C^{-1} \cdot [d_n - P_n \cdot s]
+\quad ,
+\end{eqnarray}
+where $Q$ is some constant, we have used the column-vectoriness of
+$d_n$, sparse matrix $P_n$ is trivially constructable from $p_n$, and
+$C^{-1}$ is a diagonal $M\times M$ matrix with per-pixel inverse
+variances on the diagonal and zeros everywhere else; this gives
+$\chi^2_n$ the standard ``chi-squared'' meaning.  (The data pixels can
+be made non-independent by adding off-diagonal terms to $C^{-1}$.)
+
 With some priors, we can even in principle write down a posterior
 probability distribution function over true scenes $s$ and PSFs $p_n$
 given the data (the set of all $N$ images $D_n$ or vectors $d_n$).
