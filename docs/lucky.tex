@@ -68,7 +68,7 @@ but when this pixel-convolved PSF is used, the pixel values are
 delta-function samples of the convolved intensity field, reducing
 enormously synthetic-image computation.  Furthermore, if the
 non-pixel-convolved PSF is smooth and well-sampled, the
-pixel-conovolved PSF is \emph{also} smooth, so there is no significant
+pixel-conovolved PSF is \emph{also} smooth, so there are no significant
 numerical losses or approximations incurred by making this choice.
 
 It pains us to point out that the PSF, as it is usually conceived, is
@@ -85,12 +85,13 @@ convolution
 D_n &=& \psi_n \ast I + E_n
 \quad ,
 \end{eqnarray}
-where $D_n$ is the noisy $M$-pixel image data, $\psi_n$ is the
-pixel-convolved PSF appropriate for image $n$, $\ast$ represents the
-convolution operation, $I$ is the intensity field above the
-atmosphere, and $E_n$ is the noise contribution to image $n$.
-Convolution is a linear operation, so, following \citet{hirsch}, we
-can write the model in two equivalent ways:
+where $D_n$ is the data image---one of $N$ noisy $M$-pixel
+images---with index $1<n<N$, $\psi_n$ is the pixel-convolved PSF
+appropriate for image $n$, $\ast$ represents the convolution
+operation, $I$ is the intensity field above the atmosphere, and $E_n$
+is the noise contribution to image $n$.  Convolution is a linear
+operation, so, following \citet{hirsch}, we can write the model in two
+equivalent ways:
 \begin{eqnarray}\displaystyle
 d_n &=& P_n \cdot s + e_n
 \\
@@ -112,9 +113,31 @@ represented as a matrix operation acting on another vector, and there
 is a choice of whether to see the PSF as the matrix and the scene as
 the vector, or vice versa.  Not obvious?  Think about it!
 
-...Introduce the concept of \emph{blind deconvolution} here; all of astronomy is blind deconvolution!..
+...insert here a figure demonstrating the model for one of the \LCOGT\ images...
 
-...Should we say some words here about why it is a bit dangerous to be thinking about the \emph{true scene}?..
+In real astronomical applications, neither the PSF nor the true scene
+is known \foreign{a priori}.  If our interest is the true scene---and
+it usually is---then astronomy is a special case of what's known in
+the computer science literature as \emph{blind deconvolution}.  We
+want to explain the data as being produced by something fundamental of
+interest convolved with instrumental resolution that is not known in
+advance and also of no particular interest in itself.  Astronomers are
+loath to use the word ``deconvolution'' but any time we make a catalog
+of precise stellar positions and fluxes from noisy, low-resolution
+data, we are performing some kind of deconvolution: We have
+information about the positions of stars that is much more precise
+than the the angular precision of any instrument-realized PSF.
+
+One small but perhaps not insignificant issue with the model expressed
+here is that it posits the existence of a ``true scene''.  For
+technical reasons---related to the finiteness of any real data
+stream---it is better to think of this ``true image'' as really an
+instrument for making finite-resolution predictions.  It is not going
+to be an accurate representation of the scene we would see with an
+implausible infinitely large telescope!  It is a representation of the
+intensity field that is only to be used within the context of
+covolution with a finite PSF.  Similar issues arise in radio astronomy
+when interferometric data are ``cleaned''.
 
 Now, with an error model---a probabilistic description of how the
 $E_n$ image (or equivalently, $e_n$ vector) is generated---we can
@@ -122,14 +145,28 @@ write down a likelihood function or a probability for the data $D_n$
 (or equivalently $d_n$) given the model parameters $p_n$ and $s$.
 With some priors, we can even in principle write down a posterior
 probability distribution function over true scenes $s$ and PSFs $p_n$
-given the data, which we will think of as being a set of similar
-(though different) images $D_n$.  This posterior PDF can even be
-\emph{marginalized} over all possible PSFs to leave us with a
-marginalized posterior PDF for just the true scene $s$.  That would be
-just about the best we could possibly do in this problem, for very
-general reasons.
+given the data (the set of all $N$ images $D_n$ or vectors $d_n$).
+This posterior PDF can even be \emph{marginalized} over all possible
+PSFs to leave us with a marginalized posterior PDF for just the true
+scene $s$.  That would be just about the best we could possibly do in
+this problem, for very general reasons.
 
-...Why we can't represent the posterior PDF, at least for now...
+Unfortunately, even if we apply unrealistically restrictive priors on
+image space, any posterior PDF over true scenes $s$ will be a
+dimensionally immense object.  Even when, in the experiments that
+follow, we restrict to small image patches, any useful description of
+``scene space'' will have a dimensionality $>10^4$ (the number of
+pixels in the scene representation).  Perhaps someday soon we will
+have good ways of describing non-trivial PDFs in spaces like
+this---maybe we even already do---but we (the authors) don't know
+anything realistic at the present day.  So proper probabilistic
+inference is not an option in the short term.  The posterior PDF over
+PSFs is even worse, because there is a different PSF for every image,
+and in the experiments that follow we will be using $>10^3$ images,
+each of which has a $10^{2.5}$-parameter PSF.
+
+These considerations lead us to optimization rather than sampling or
+full probabilistic approaches.  What to optimize?
 
 ...How regularization and optimization is related to the prior PDF and posterior PDF...
 
@@ -145,9 +182,15 @@ general reasons.
 (T\"ubingen), Michael Hirsch (UCL), and Bernhard Sch\"olkopf
 (T\"ubingen) for introducing us to the ideas in \citet{hirsch}; many
 of the technical ideas in this \documentname\ come from their work.
-We also single out Dustin Lang and Robert Lupton for special thanks;
-DWH wouldn't understand anything about imaging if it weren't for the
-many years of discussions.
+We also single out Dustin Lang (CMU) and Robert Lupton (Princeton) for
+special thanks; DWH wouldn't understand anything about imaging if it
+weren't for the many years of discussions.  DWH and DFM were partially
+supported by NASA (grant GRANT NUMBER HERE) and the NSF (grant
+IIS-1124794).  This project made use of the NASA \project{Astrophysics
+  Data System}, and code in the the \project{numpy}, \project{scipy},
+and \project{matplotlib} open-source projects.  All the code used in
+this paper is available at [URL HERE], and sample data are available
+at [URL HERE].
 
 \begin{thebibliography}{70}
 \bibitem[Hirsch \etal(2011)]{hirsch}
