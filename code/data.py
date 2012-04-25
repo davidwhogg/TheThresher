@@ -62,15 +62,15 @@ class Image(object):
         self.info = {}
         f.close()
 
-        hw = 80
+        hw = 128
         if self._center:
             # Centroid and take an image section.
             s = np.sum(data)
             xc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=1)) / s))
             yc = np.argmin(np.abs(0.5 - np.cumsum(np.sum(data, axis=0)) / s))
         else:
-            xc = data.shape[0] / 2 - 42 # MAGIC
-            yc = data.shape[1] / 2 - 25 # MAGIC
+            xc = data.shape[0] / 2
+            yc = data.shape[1] / 2
         self.info['xc'] = xc
         self.info['yc'] = yc
         self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
