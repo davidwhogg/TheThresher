@@ -3,7 +3,8 @@ This file is part of the Lucky Imaging project.
 
 issues:
 -------
-- centroiding is a hack-orama.
+- centroiding is a hack-orama; replace with a function that takes bigdata, scene and does one-d convolves and returns xc, yc
+- sky fitting and display of results when sky has been fit needs to be audited -- should be able to add a sky offset and get IDENTICAL results out.
 - region of binary image set by borderx, bordery; hard-coded! MAGIC NUMBERS
 - Ought to pickle on the fly so as not to repeat labor when re-run?
 - The infer functions ought to take weight vectors -- this would permit dropping data for cross-validation tests and also inclusion of an error model.
@@ -112,50 +113,11 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
 
     # infer PSF and return
     dataVector = np.append(data.reshape(data.size), np.zeros(psfParameterSize))
-    if True: # nnls method
-        newPsfParameter, rnorm = op.nnls(sceneMatrix, dataVector)
-        newPsfParameter = newPsfParameter[:psfParameterSize] # drop sky
-    if False: # l_bfgs_b method -- DOES NOT SEEM TO RESPECT BOUNDS!
-        def cost(psf):
-            return np.sum((dataVector - np.dot(sceneMatrix, psf))**2)
-        def deriv(psf):
-            return -2. * np.dot(sceneMatrix.T, (dataVector - np.dot(sceneMatrix, psf)))
-        # note MAGIC NUMBERS 10000 because I am afraid of using `None`
-        bounds = [(0., 10000.) for p in range(psfParameterSize)]
-        bounds.append((-10000., 10000.))
-        # in the next line, should have `fprime` argument NOT `approx_grad` argument
-        newPsfParameter, f, d = op.fmin_l_bfgs_b(cost, np.ones(psfParameterSize + 1), fprime=deriv, approx_grad=False, epsilon=1.e-6) # HARDCORE OPTIONS: factr=0., pgtol=0.
-        newPsfParameter = newPsfParameter[:psfParameterSize] # drop sky
-    if False: # levmar method
-        def resid(lnpsf):
-            foo = np.exp(lnpsf) # exp psf amplitudes
-            foo[-1] = lnpsf[-1] # deal with sky
-            return np.dot(sceneMatrix, foo) - dataVector
-        def jacobian(lnpsf):
-            foo = np.exp(lnpsf) # exp psf amplitudes
-            foo[-1] = 1. # deal with sky
-            return sceneMatrix * foo[None,:]
-        def unit_test_jacobian(lnpsf):
-            delta = 1.e-4 # magic number
-            j0 = jacobian(lnpsf)
-            r0 = resid(lnpsf)
-            for k,p in enumerate(lnpsf):
-                l1 = 1. * lnpsf
-                l1[k] += delta
-                badness = (resid(l1) - r0) / delta - j0[:,k]
-                print k, badness
-                assert(np.all(badness**2 <= 1e-6 * j0[:,k]**2))
-        first_guess = np.zeros(psfParameterSize + 1)
-        if runUnitTest:
-            unit_test_jacobian(first_guess)
-            unit_test_jacobian(np.random.normal(size=first_guess.size))
-        # should add option `Dfun=jacobian` to the next line for speed, but if fails if I do. - Hogg
-        (newLnPsfParameter, cov_x, infodict, mesg, ier) = op.leastsq(resid, first_guess, full_output=True, xtol=1.e-5, ftol=1e-5) # HARDCORE OPTIONS: xtol=0., ftol=0.
-        if runUnitTest:
-            unit_test_jacobian(newLnPsfParameter)
-        newPsfParameter = np.exp(newLnPsfParameter[:psfParameterSize]) # drop sky
+    newPsfParameter, rnorm = op.nnls(sceneMatrix, dataVector)
+    print "infer_psf(): dropping sky level", newPsfParameter[psfParameterSize]
+    newPsfParameter = newPsfParameter[:psfParameterSize] # drop sky
     newPsf = convolve(newPsfParameter[::-1].reshape(psfParameterShape), kernel, mode="full")
-    print "got PSF", newPsf.shape, np.min(newPsf), np.max(newPsf)
+    print "infer_psf(): got PSF", newPsf.shape, np.min(newPsf), np.median(newPsf), np.max(newPsf)
     return newPsf
 
 def infer_scene(data, psf, l2norm):
@@ -209,18 +171,17 @@ def infer_scene(data, psf, l2norm):
     rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
     cols = np.append(cols, np.arange(sceneSize))
     psfMatrix = csr_matrix((vals, (rows, cols)), shape=(data.size + sceneSize, sceneSize + 1))
-    print 'constructed psfMatrix:', min(rows), max(rows), data.size, sceneSize, min(cols), max(cols), sceneSize
+    print 'infer_scene(): constructed psfMatrix:', min(rows), max(rows), data.size, sceneSize, min(cols), max(cols), sceneSize
 
     # infer scene and return
     dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
     skyVector = np.zeros(data.size + sceneSize)
-    if False:
-        newScene, rnorm = op.nnls(psfMatrix.todense(), dataVector)
-    if True:
-        (newScene, istop, niters, r1norm, r2norm, anorm, acond,
-         arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
+    (newScene, istop, niters, r1norm, r2norm, anorm, acond,
+     arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
+    print "infer_scene(): dropping sky", newScene[sceneSize]
     newScene = newScene[:sceneSize].reshape(sceneShape)
-    print "got scene", newScene.shape, np.min(newScene), np.max(newScene)
+    newScene -= np.median(newScene) # hack
+    print "infer_scene(): got scene", newScene.shape, np.min(newScene), np.median(newScene), np.max(newScene)
     return newScene
 
 def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, plot=None, runUnitTest=False):
@@ -254,13 +215,13 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, p
     '''
     newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
     thisScene = infer_scene(data, newPsf, sceneL2norm)
-    print "updating with", alpha, psfL2norm, sceneL2norm, nonNegative
+    print "inference_step(): updating with", alpha, psfL2norm, sceneL2norm, nonNegative
     assert(alpha > 0.)
     assert(alpha <= 1.)
     newScene = (1. - alpha) * oldScene + alpha * thisScene
     if nonNegative: # this is brutal
         newScene = np.clip(newScene, 0.0, np.Inf)
-        print 'clipped scene:', np.min(newScene), np.max(newScene)
+        print 'inference_step(): clipped scene:', np.min(newScene), np.max(newScene)
     if plot is not None:
         plot_inference_step(data, scene, newPsf, newScene, plot)
     return newPsf, newScene
@@ -289,7 +250,6 @@ def plot_inference_step(data, scene, newPsf, newScene, filename):
     my_plot(ax3, convolve(newScene, newPsf, mode="valid"))
     ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
     bigPsf = np.zeros_like(data)
-    print bigPsf.shape, hw2, newPsf.shape
     bigPsf[hw2:hw2+newPsf.shape[0],hw2:hw2+newPsf.shape[1]] = newPsf
     my_plot(ax4, bigPsf)
     ax4.set_title("inferred PSF (padded)")
@@ -307,7 +267,7 @@ def hogg_savefig(fn):
     Hogg likes a verbose `savefig()`!
     '''
     print "writing %s" % fn
-    return plt.savefig(fn)
+    return "hogg_savefig():", plt.savefig(fn)
 
 def unit_tests():
     '''
@@ -408,50 +368,39 @@ if __name__ == '__main__':
     size = 100
     # do the full inference
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
+        bigdata = 1. * img.image
+        img._image = None # clear space?
+        assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
         if count == 0:
             # initialization is insane here; this could be improved
             # NOTE MAGIC NUMBERS
-            bigdata = 1. * img.image
-            assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
-            img._image = None # clear space?
             borderx = (bigdata.shape[0] - size) / 2
             bordery = borderx
             if binary:
                 borderx, bordery = 42, 65 # hard coded MAGIC NUMBERS
             data = bigdata[borderx : borderx + size, bordery : bordery + size]
-            data += np.abs(np.min(data)) # hack
             dataShape = data.shape
-            assert(dataShape[0] == dataShape[1])
             scene = convolve(data, defaultpsf, mode="full")
             foo = convolve(bigdata, scene, mode="valid")
             mi = np.argmax(foo)
             x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
             scene = convolve(data, defaultpsf, mode="full")
             scene = np.clip(scene, 0.0, np.Inf)
-            alpha = 0.5
-            psf, scene = inference_step(data, scene, alpha,
-                                        0., 1./32., True,
-                                        plot=os.path.join(img_dir, "%04d.png" % 0))
-            defaultpsf = psf
-            print bigdata.shape, data.shape, psf.shape, scene.shape
         else:
-            bigdata = 1. * img.image
-            img._image = None # clear space?
-            assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
             assert((bigdata.shape[0] - scene.shape[0]) > 20) # if this difference isn't large, the centroiding is useless
             smoothscene = convolve(scene, defaultpsf, mode="same")
             mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
             xc, yc = (mi / foo.shape[1]) - x0, (mi % foo.shape[1]) - y0
             print "got centroid shift", (xc, yc)
             data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
-            data += np.abs(np.min(data)) # hack
-            assert(data.shape == dataShape) # if this isn't true then some edges got hit
-            alpha = 2. / (1. + float(count))
-            if alpha > 0.25: alpha = 0.25
-            psf, scene = inference_step(data, scene, alpha,
-                                        0., 1./32., True,
-                                        plot=os.path.join(img_dir, "%04d.png" % (count+1)))
-            print bigdata.shape, data.shape, psf.shape, scene.shape
+        assert(data.shape == dataShape) # if this isn't true then some edges got hit
+        alpha = 2. / (1. + float(count))
+        if alpha > 0.25: alpha = 0.25
+        data += 1.0 # hack to test sky fitting
+        psf, scene = inference_step(data, scene, alpha,
+                                    1./4., 1./64., True,
+                                    plot=os.path.join(img_dir, "%04d.png" % count))
+        print bigdata.shape, data.shape, psf.shape, scene.shape
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
     for pindex in (2, 3, 4, 5):
         for count, img in enumerate(Image.get_all(bp=bp, center=center)):
@@ -464,12 +413,10 @@ if __name__ == '__main__':
             xc, yc = x0 - mi / foo.shape[1], y0 - (mi % foo.shape[1])
             print "got centroid shift", count, (xc, yc)
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
-            data += np.abs(np.min(data)) # hack
-            if data.shape[0] != data.shape[1]:
-                print xc, yc, x0, y0, border, size, bigdata.shape
-                assert(data.shape == dataShape) # if this isn't true then some edges got hit
+            assert(data.shape == dataShape) # if this isn't true then some edges got hit
+            data += 1.0 # hack to test sky fitting
             psf, scene = inference_step(data, scene, alpha,
-                                        0., 1./32., False,
+                                        1./4., 1./64., False,
                                         plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
 
 '''
