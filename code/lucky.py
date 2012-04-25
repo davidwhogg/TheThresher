@@ -266,8 +266,8 @@ def hogg_savefig(fn):
 
     Hogg likes a verbose `savefig()`!
     '''
-    print "writing %s" % fn
-    return "hogg_savefig():", plt.savefig(fn)
+    print "hogg_savefig(): writing %s" % fn
+    return plt.savefig(fn)
 
 def unit_tests():
     '''
@@ -391,7 +391,7 @@ if __name__ == '__main__':
             smoothscene = convolve(scene, defaultpsf, mode="same")
             mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
             xc, yc = (mi / foo.shape[1]) - x0, (mi % foo.shape[1]) - y0
-            print "got centroid shift", (xc, yc)
+            print "__main__: got centroid shift", (xc, yc)
             data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
         assert(data.shape == dataShape) # if this isn't true then some edges got hit
         alpha = 2. / (1. + float(count))
@@ -411,7 +411,7 @@ if __name__ == '__main__':
             smoothscene = convolve(scene, defaultpsf, mode="same")
             mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
             xc, yc = x0 - mi / foo.shape[1], y0 - (mi % foo.shape[1])
-            print "got centroid shift", count, (xc, yc)
+            print "__main__: got centroid shift", count, (xc, yc)
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             data += 1.0 # hack to test sky fitting
