@@ -3,6 +3,8 @@ This file is part of the Lucky Imaging project.
 
 issues:
 -------
+- centroiding is a hack-orama.
+- region of binary image set by borderx, bordery; hard-coded! MAGIC NUMBERS
 - Ought to pickle on the fly so as not to repeat labor when re-run?
 - The infer functions ought to take weight vectors -- this would permit dropping data for cross-validation tests and also inclusion of an error model.
 - Centroiding does *not* seem to be working very well.  It is stupid-heuristic.
@@ -377,14 +379,17 @@ if __name__ == '__main__':
     bp = os.getenv("LUCKY_DATA", "/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled")
     img_dir = "mars"
     center = True
+    binary = False
     if "--binary" in sys.argv:
         bp = os.getenv("BINARY_DATA", "/data2/dfm/lucky/binary")
         img_dir = "binary"
         center = False
+        binary = True
     if "--binary_short" in sys.argv:
         bp = "/data2/dfm/lucky/binary_short"
         img_dir = "binary_short"
         center = False
+        binary = True
 
     try:
         os.makedirs(img_dir)
@@ -394,39 +399,59 @@ if __name__ == '__main__':
     hw = 13
     psf = np.zeros((2*hw+1, 2*hw+1))
     psf[hw,hw] = 1.
+    defaultpsf = psf
+    defaultpsf[hw,hw] = 1.
+    defaultpsf[hw-1,hw] = 1.
+    defaultpsf[hw+1,hw] = 1.
+    defaultpsf[hw,hw-1] = 1.
+    defaultpsf[hw,hw+1] = 1.
     size = 100
     # do the full inference
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         if count == 0:
+            # initialization is insane here; this could be improved
+            # NOTE MAGIC NUMBERS
             bigdata = 1. * img.image
+            assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
             img._image = None # clear space?
-            border = (bigdata.shape[0] - size) / 2
-            data = bigdata[border : border + size, border : border + size]
+            borderx = (bigdata.shape[0] - size) / 2
+            bordery = borderx
+            if binary:
+                borderx, bordery = 42, 65 # hard coded MAGIC NUMBERS
+            data = bigdata[borderx : borderx + size, bordery : bordery + size]
+            data += np.abs(np.min(data)) # hack
             dataShape = data.shape
             assert(dataShape[0] == dataShape[1])
-            scene = convolve(data, psf, mode="full")
+            scene = convolve(data, defaultpsf, mode="full")
             foo = convolve(bigdata, scene, mode="valid")
             mi = np.argmax(foo)
             x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
-            scene = convolve(data, psf, mode="full")
+            scene = convolve(data, defaultpsf, mode="full")
             scene = np.clip(scene, 0.0, np.Inf)
+            alpha = 0.5
+            psf, scene = inference_step(data, scene, alpha,
+                                        0., 1./32., True,
+                                        plot=os.path.join(img_dir, "%04d.png" % 0))
+            defaultpsf = psf
+            print bigdata.shape, data.shape, psf.shape, scene.shape
         else:
             bigdata = 1. * img.image
             img._image = None # clear space?
             assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
-            assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
-            mi = np.argmax(convolve(bigdata, scene, mode="valid"))
-            xc, yc = x0 - mi / foo.shape[1], y0 - (mi % foo.shape[1])
+            assert((bigdata.shape[0] - scene.shape[0]) > 20) # if this difference isn't large, the centroiding is useless
+            smoothscene = convolve(scene, defaultpsf, mode="same")
+            mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
+            xc, yc = (mi / foo.shape[1]) - x0, (mi % foo.shape[1]) - y0
             print "got centroid shift", (xc, yc)
-            data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size] # this line isn't quite right?
-            if data.shape[0] != data.shape[1]:
-                print xc, yc, x0, y0, border, size, bigdata.shape
+            data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
+            data += np.abs(np.min(data)) # hack
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             alpha = 2. / (1. + float(count))
             if alpha > 0.25: alpha = 0.25
             psf, scene = inference_step(data, scene, alpha,
-                                        1., 1./32., True,
-                                        plot=os.path.join(img_dir, "%04d.png" % count))
+                                        0., 1./32., True,
+                                        plot=os.path.join(img_dir, "%04d.png" % (count+1)))
+            print bigdata.shape, data.shape, psf.shape, scene.shape
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
     for pindex in (2, 3, 4, 5):
         for count, img in enumerate(Image.get_all(bp=bp, center=center)):
@@ -434,15 +459,17 @@ if __name__ == '__main__':
             img._image = None # clear space?
             assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
             assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
-            mi = np.argmax(convolve(bigdata, scene, mode="valid"))
+            smoothscene = convolve(scene, defaultpsf, mode="same")
+            mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
             xc, yc = x0 - mi / foo.shape[1], y0 - (mi % foo.shape[1])
             print "got centroid shift", count, (xc, yc)
             data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
+            data += np.abs(np.min(data)) # hack
             if data.shape[0] != data.shape[1]:
                 print xc, yc, x0, y0, border, size, bigdata.shape
                 assert(data.shape == dataShape) # if this isn't true then some edges got hit
             psf, scene = inference_step(data, scene, alpha,
-                                        1., 1./32., False,
+                                        0., 1./32., False,
                                         plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
 
 '''
