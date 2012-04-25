@@ -422,13 +422,13 @@ if __name__ == '__main__':
             if data.shape[0] != data.shape[1]:
                 print xc, yc, x0, y0, border, size, bigdata.shape
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
-            alpha = 1. / (1. + float(count))
+            alpha = 2. / (1. + float(count))
+            if alpha > 0.25: alpha = 0.25
             psf, scene = inference_step(data, scene, alpha,
                                         1., 1./32., True,
                                         plot=os.path.join(img_dir, "%04d.png" % count))
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
     for pindex in (2, 3, 4, 5):
-        alpha = 2. * alpha
         for count, img in enumerate(Image.get_all(bp=bp, center=center)):
             bigdata = 1. * img.image
             img._image = None # clear space?
