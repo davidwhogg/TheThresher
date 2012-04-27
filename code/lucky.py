@@ -417,7 +417,7 @@ if __name__ == '__main__':
             mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
             xc, yc = x0 - mi / foo.shape[1], y0 - (mi % foo.shape[1])
             print "__main__: got centroid shift", count, (xc, yc)
-            data = bigdata[border + xc : border + xc + size, border + yc : border + yc + size]
+            data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             data += 1.0 # hack to test sky fitting
             psf, scene = inference_step(data, scene, alpha,
