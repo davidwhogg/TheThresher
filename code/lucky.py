@@ -350,6 +350,11 @@ if __name__ == '__main__':
         img_dir = "binary_short"
         center = False
         binary = True
+    if "--triple" in sys.argv:
+        bp = "/data2/dfm/lucky/triple"
+        img_dir = "triple"
+        center = False
+        binary = True
 
     try:
         os.makedirs(img_dir)
