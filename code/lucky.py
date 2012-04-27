@@ -373,6 +373,7 @@ if __name__ == '__main__':
     defaultpsf[hw,hw+1] = 1.
     size = 100
     # do the full inference
+    pindex = 1
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         bigdata = 1. * img.image
         img._image = None # clear space?
@@ -409,7 +410,7 @@ if __name__ == '__main__':
             data += 35.0 # hack suggested by Bianco
         psf, scene = inference_step(data, scene, alpha,
                                     1./4., 1./64., True,
-                                    plot=os.path.join(img_dir, "%04d.png" % count))
+                                    plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
         print bigdata.shape, data.shape, psf.shape, scene.shape
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
     for pindex in (2, 3, 4, 5):
