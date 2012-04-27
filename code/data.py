@@ -41,7 +41,7 @@ class Image(object):
 
         """
         entries = os.listdir(bp)
-        for e in entries:
+        for e in sorted(entries):
             if os.path.splitext(e)[1] == ".fits":
                 o = cls(fn=e, bp=bp, center=center)
                 yield o
