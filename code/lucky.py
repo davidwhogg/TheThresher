@@ -352,7 +352,7 @@ if __name__ == '__main__':
         center = False
         binary = True
     if "--triple" in sys.argv:
-        bp = "/data2/dfm/lucky/triple"
+        bp = os.getenv("TRIPLE_DATA", "/data2/dfm/lucky/triple")
         img_dir = "triple"
         center = False
         trinary = True
@@ -376,6 +376,7 @@ if __name__ == '__main__':
     pindex = 1
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
         bigdata = 1. * img.image
+        print "__main__: bigdata median", np.median(bigdata)
         img._image = None # clear space?
         assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
         if count == 0:
@@ -407,7 +408,7 @@ if __name__ == '__main__':
         if alpha > 0.25: alpha = 0.25
         data += 1.0 # hack to test sky fitting
         if trinary:
-            data += 35.0 # hack suggested by Bianco
+            data += 3.0 # hack suggested by Bianco
         psf, scene = inference_step(data, scene, alpha,
                                     1./4., 1./64., True,
                                     plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
@@ -427,7 +428,7 @@ if __name__ == '__main__':
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             data += 1.0 # hack to test sky fitting
             if trinary:
-                data += 35.0 # hack suggested by Bianco
+                data += 3.0 # hack suggested by Bianco
             psf, scene = inference_step(data, scene, alpha,
                                         1./4., 1./64., False,
                                         plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
