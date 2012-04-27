@@ -6,6 +6,7 @@
 .DS_Store
 data
 data-binary
+data-triple
 venv
 nohup.out
 lucky.pdf
