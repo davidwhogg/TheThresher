@@ -340,6 +340,7 @@ if __name__ == '__main__':
     img_dir = "mars"
     center = True
     binary = False
+    trinary = False
     if "--binary" in sys.argv:
         bp = os.getenv("BINARY_DATA", "/data2/dfm/lucky/binary")
         img_dir = "binary"
@@ -354,7 +355,7 @@ if __name__ == '__main__':
         bp = "/data2/dfm/lucky/triple"
         img_dir = "triple"
         center = False
-        binary = True
+        trinary = True
 
     try:
         os.makedirs(img_dir)
@@ -383,6 +384,8 @@ if __name__ == '__main__':
             bordery = borderx
             if binary:
                 borderx, bordery = 42, 65 # hard coded MAGIC NUMBERS
+            if trinary:
+                borderx, bordery = 82, 65 # hard coded MAGIC NUMBERS
             data = bigdata[borderx : borderx + size, bordery : bordery + size]
             dataShape = data.shape
             scene = convolve(data, defaultpsf, mode="full")
@@ -402,6 +405,8 @@ if __name__ == '__main__':
         alpha = 2. / (1. + float(count))
         if alpha > 0.25: alpha = 0.25
         data += 1.0 # hack to test sky fitting
+        if trinary:
+            data += 35.0 # hack suggested by Bianco
         psf, scene = inference_step(data, scene, alpha,
                                     1./4., 1./64., True,
                                     plot=os.path.join(img_dir, "%04d.png" % count))
@@ -420,6 +425,8 @@ if __name__ == '__main__':
             data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             data += 1.0 # hack to test sky fitting
+            if trinary:
+                data += 35.0 # hack suggested by Bianco
             psf, scene = inference_step(data, scene, alpha,
                                         1./4., 1./64., False,
                                         plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
