@@ -408,7 +408,7 @@ if __name__ == '__main__':
         if alpha > 0.25: alpha = 0.25
         data += 1.0 # hack to test sky fitting
         if trinary:
-            data += 3.0 # hack suggested by Bianco
+            data += 6.0 # hack suggested by Bianco
         psf, scene = inference_step(data, scene, alpha,
                                     1./4., 1./64., True,
                                     plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
@@ -428,7 +428,7 @@ if __name__ == '__main__':
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             data += 1.0 # hack to test sky fitting
             if trinary:
-                data += 3.0 # hack suggested by Bianco
+                data += 6.0 # hack suggested by Bianco
             psf, scene = inference_step(data, scene, alpha,
                                         1./4., 1./64., False,
                                         plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
