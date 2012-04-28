@@ -372,6 +372,8 @@ if __name__ == '__main__':
     defaultpsf[hw,hw-1] = 1.
     defaultpsf[hw,hw+1] = 1.
     size = 100
+    if trinary:
+        size = 40
     # do the full inference
     pindex = 1
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
@@ -387,7 +389,7 @@ if __name__ == '__main__':
             if binary:
                 borderx, bordery = 42, 65 # hard coded MAGIC NUMBERS
             if trinary:
-                borderx, bordery = 82, 65 # hard coded MAGIC NUMBERS
+                borderx, bordery = 74 + 30, 66 + 30 # hard coded MAGIC NUMBERS
             data = bigdata[borderx : borderx + size, bordery : bordery + size]
             dataShape = data.shape
             scene = convolve(data, defaultpsf, mode="full")
