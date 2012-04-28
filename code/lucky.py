@@ -422,7 +422,7 @@ if __name__ == '__main__':
             assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
             smoothscene = convolve(scene, defaultpsf, mode="same")
             mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
-            xc, yc = x0 - mi / foo.shape[1], y0 - (mi % foo.shape[1])
+            xc, yc = (mi / foo.shape[1]) - x0, (mi % foo.shape[1]) - y0
             print "__main__: got centroid shift", count, (xc, yc)
             data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
