@@ -240,22 +240,25 @@ def plot_inference_step(data, scene, newPsf, newScene, filename):
     ax4 = fig.add_subplot(234)
     ax5 = fig.add_subplot(235)
     ax6 = fig.add_subplot(236)
-    my_plot = lambda ax, im: ax.imshow(im, cmap="gray", interpolation="nearest")
+    def hogg_plot_image(ax, im):
+        a = np.median(im)
+        b = np.max(im)
+        return ax.imshow(im, cmap="gray", interpolation="nearest", vmin=(a - 0.2 * (b - a)), vmax=b)
     hw1 = (newPsf.shape[0] - 1) / 2
     hw2 = (data.shape[0] - newPsf.shape[0] - 1) / 2
-    my_plot(ax1, data)
+    hogg_plot_image(ax1, data)
     ax1.set_title("data")
-    my_plot(ax2, convolve(scene, newPsf, mode="valid"))
+    hogg_plot_image(ax2, convolve(scene, newPsf, mode="valid"))
     ax2.set_title(r"[inferred PSF] $\ast$ [previous scene]")
-    my_plot(ax3, convolve(newScene, newPsf, mode="valid"))
+    hogg_plot_image(ax3, convolve(newScene, newPsf, mode="valid"))
     ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
     bigPsf = np.zeros_like(data)
     bigPsf[hw2:hw2+newPsf.shape[0],hw2:hw2+newPsf.shape[1]] = newPsf
-    my_plot(ax4, bigPsf)
+    hogg_plot_image(ax4, bigPsf)
     ax4.set_title("inferred PSF (padded)")
-    my_plot(ax5, scene[hw1:-hw1,hw1:-hw1])
+    hogg_plot_image(ax5, scene[hw1:-hw1,hw1:-hw1])
     ax5.set_title("previous scene (cropped)")
-    my_plot(ax6, newScene[hw1:-hw1,hw1:-hw1])
+    hogg_plot_image(ax6, newScene[hw1:-hw1,hw1:-hw1])
     ax6.set_title("updated scene (cropped)")
     hogg_savefig(filename)
     return None
