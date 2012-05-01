@@ -422,6 +422,7 @@ if __name__ == '__main__':
         print bigdata.shape, data.shape, psf.shape, scene.shape
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
     for pindex in (2, 3, 4, 5):
+        scene -= np.median(scene) # hack
         for count, img in enumerate(Image.get_all(bp=bp, center=center)):
             bigdata = 1. * img.image
             print "__main__: bigdata median", np.median(bigdata)
