@@ -417,7 +417,7 @@ if __name__ == '__main__':
         if alpha > 0.25: alpha = 0.25
         data += sky # hack
         psf, scene = inference_step(data, scene, alpha,
-                                    1./4., 1. * alpha, True,
+                                    1./4., 4. * alpha, True,
                                     plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
         print bigdata.shape, data.shape, psf.shape, scene.shape
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
@@ -436,7 +436,7 @@ if __name__ == '__main__':
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
             data += sky # hack
             psf, scene = inference_step(data, scene, alpha,
-                                        1./4., 1. * alpha, False,
+                                        1./4., 4. * alpha, False,
                                         plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
 
 '''
