@@ -70,6 +70,9 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     Bug: There is a reversal (a `[::-1]`) in the code that is not
     fully understood at present.
 
+    Bug: Shouldn't make the kernels at every call; these should be
+    static or passed in.
+
     ### input:
 
     * `data`: An individual image.
@@ -87,7 +90,6 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     Kx, Ky = kernel.shape
     tinykernel = np.zeros_like(kernel)
     tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
-    print tinykernel
 
     # deal with all the size and shape setup
     Nx, Ny = scene.shape
