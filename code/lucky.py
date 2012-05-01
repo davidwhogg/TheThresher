@@ -330,6 +330,17 @@ def unit_tests():
     data = np.zeros((50, 50))
     scene = np.zeros((64, 64))
     scene[48, 48] = 1.
+
+    # Unit tests for save/read scene functions.
+    fn = ".unit_test.fits"
+    save_scene(scene, fn)
+    loadedScene = read_scene(fn)
+    try:
+        os.remove(fn)
+    except:
+        pass
+    assert np.sum(np.abs(scene - loadedScene)) < 1e-10
+
     newPsf, newScene = inference_step(data, scene, 0.001, runUnitTest=True)
     print "psf:", newPsf.shape, np.min(newPsf), np.max(newPsf)
     print "scene:", newScene.shape, np.min(newScene), np.max(newScene)
@@ -338,16 +349,6 @@ def unit_tests():
     assert(np.all(newPsf <  1.e-3)) # should be more stringent
     assert(np.all(newScene == 0))
     print 'unit_tests(): all tests passed'
-
-    # Unit tests for save/read scene functions.
-    fn = ".unit_test.fits"
-    save_scene(newScene, fn)
-    loadedScene = read_scene(fn)
-    try:
-        os.remove(fn)
-    except:
-        pass
-    assert np.sum(np.abs(newScene - loadedScene) / newScene) < 1e-10
 
     return None
 
