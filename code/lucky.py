@@ -146,7 +146,7 @@ def infer_scene(data, psf, alpha, oldScene):
     * `scene`
     '''
     # deal with all the size and shape setup
-    assert(l2norm > 0.)
+    assert(alpha > 0.)
     Px, Py = data.shape
     Mx, My = psf.shape
     Nx, Ny = (Px + Mx - 1, Py + My - 1)
@@ -425,9 +425,8 @@ if __name__ == '__main__':
     if trinary:
         size = 64
         sky = 7.
-        reconvolve_kernel = np.exp((-0.5 / 1.5**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
+        reconvolve_kernel = np.exp((-0.5 / 1.0**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
         reconvolve_kernel /= np.sum(reconvolve_kernel)
-        print reconvolve_kernel
     # do the full inference
     for pindex in (1, 2, 3, 4, 5):
         savefn = "pass%1d.fits" % pindex
