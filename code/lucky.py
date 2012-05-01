@@ -221,7 +221,8 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, p
     newScene = (1. - alpha) * oldScene + alpha * thisScene
     if nonNegative: # this is brutal
         newScene = np.clip(newScene, 0.0, np.Inf)
-        print 'inference_step(): clipped scene:', np.min(newScene), np.max(newScene)
+        print 'inference_step(): clipped scene to non-negative'
+    print 'inference_step(): new scene:', np.min(newScene), np.median(newScene), np.max(newScene)
     if plot is not None:
         plot_inference_step(data, scene, newPsf, newScene, plot)
     return newPsf, newScene
@@ -375,8 +376,10 @@ if __name__ == '__main__':
     defaultpsf[hw,hw-1] = 1.
     defaultpsf[hw,hw+1] = 1.
     size = 100
+    sky = 1.
     if trinary:
-        size = 40
+        size = 64
+        sky = 7.
     # do the full inference
     pindex = 1
     for count, img in enumerate(Image.get_all(bp=bp, center=center)):
@@ -392,7 +395,7 @@ if __name__ == '__main__':
             if binary:
                 borderx, bordery = 42, 65 # hard coded MAGIC NUMBERS
             if trinary:
-                borderx, bordery = 74 + 30, 66 + 30 # hard coded MAGIC NUMBERS
+                borderx, bordery = 74 + 18, 66 + 18 # hard coded MAGIC NUMBERS
             data = bigdata[borderx : borderx + size, bordery : bordery + size]
             dataShape = data.shape
             scene = convolve(data, defaultpsf, mode="full")
@@ -400,6 +403,7 @@ if __name__ == '__main__':
             mi = np.argmax(foo)
             x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
             scene = convolve(data, defaultpsf, mode="full")
+            scene -= np.median(scene)
             scene = np.clip(scene, 0.0, np.Inf)
         else:
             assert((bigdata.shape[0] - scene.shape[0]) > 20) # if this difference isn't large, the centroiding is useless
@@ -411,11 +415,9 @@ if __name__ == '__main__':
         assert(data.shape == dataShape) # if this isn't true then some edges got hit
         alpha = 2. / (1. + float(count))
         if alpha > 0.25: alpha = 0.25
-        data += 1.0 # hack to test sky fitting
-        if trinary:
-            data += 6.0 # hack suggested by Bianco
+        data += sky # hack
         psf, scene = inference_step(data, scene, alpha,
-                                    1./4., 1./64., True,
+                                    1./4., 1. * alpha, True,
                                     plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
         print bigdata.shape, data.shape, psf.shape, scene.shape
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
@@ -431,11 +433,9 @@ if __name__ == '__main__':
             print "__main__: got centroid shift", count, (xc, yc)
             data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
             assert(data.shape == dataShape) # if this isn't true then some edges got hit
-            data += 1.0 # hack to test sky fitting
-            if trinary:
-                data += 6.0 # hack suggested by Bianco
+            data += sky # hack
             psf, scene = inference_step(data, scene, alpha,
-                                        1./4., 1./64., False,
+                                        1./4., 1. * alpha, False,
                                         plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
 
 '''
