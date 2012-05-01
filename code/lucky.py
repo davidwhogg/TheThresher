@@ -121,7 +121,7 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     print "infer_psf(): got PSF", newPsf.shape, np.min(newPsf), np.median(newPsf), np.max(newPsf)
     return newPsf
 
-def infer_scene(data, psf, alpha, oldScene):
+def infer_scene(data, psf, oldReg, oldScene):
     '''
     # `infer_scene()`:
 
@@ -137,7 +137,7 @@ def infer_scene(data, psf, alpha, oldScene):
 
     * `data`: An individual image.
     * `psf`: A PSF image (used only for shape and size information).
-    * `alpha`: Amplitude for the (required) regularization using the
+    * `oldReg`: Amplitude for the (required) regularization using the
       existing scene.
     * `oldScene`: The existing scene.
 
@@ -146,7 +146,7 @@ def infer_scene(data, psf, alpha, oldScene):
     * `scene`
     '''
     # deal with all the size and shape setup
-    assert(alpha > 0.)
+    assert(oldReg > 0.)
     Px, Py = data.shape
     Mx, My = psf.shape
     Nx, Ny = (Px + Mx - 1, Py + My - 1)
@@ -167,7 +167,7 @@ def infer_scene(data, psf, alpha, oldScene):
         cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
 
     # add entries for old-scene-based regularization
-    vals = np.append(vals, np.zeros(sceneSize) + alpha)
+    vals = np.append(vals, np.zeros(sceneSize) + oldReg)
     rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
     cols = np.append(cols, np.arange(sceneSize))
 
@@ -182,7 +182,7 @@ def infer_scene(data, psf, alpha, oldScene):
     print "infer_scene(): got scene", newScene.shape, np.min(newScene), np.median(newScene), np.max(newScene)
     return newScene
 
-def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, reconvolve=None, plot=None, runUnitTest=False):
+def inference_step(data, oldScene, alpha, psfL2norm, nonNegative, reconvolve=None, plot=None, runUnitTest=False):
     '''
     # `inference_step()`:
 
@@ -199,8 +199,6 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, r
     * `alpha`: fraction of a full step to take; should be something
       like `1./nIteration`.
     * `psfl2norm`: Amplitude of L2 regularization for PSF; units TBA.
-    * `scenel2norm`: Amplitude of L2 regularization for scene; units
-      TBA.
     * `nonNegative`: If `True`, apply non-negative clip.  Harsh!.
     * `plot`: If not `None`, make a standard plot with this name.
     * `runUnitTest`: If `True`, pass forward unit test requests to
@@ -214,8 +212,8 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, r
     assert(alpha > 0.)
     assert(alpha <= 1.)
     newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
-    thisScene = infer_scene(data, newPsf, alpha, oldScene)
-    print "inference_step(): updating with", alpha, psfL2norm, sceneL2norm, nonNegative
+    thisScene = infer_scene(data, newPsf, (1. / 64.), oldScene)
+    print "inference_step(): updating with", alpha, psfL2norm, nonNegative
     if reconvolve is not None:
         thisScene = convolve(thisScene, reconvolve, mode="same")
     newScene = (1. - alpha) * oldScene + alpha * thisScene
@@ -426,8 +424,8 @@ if __name__ == '__main__':
     if trinary:
         size = 64
         sky = 7.
-        reconvolve_kernel = np.exp((-0.5 / 1.0**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
-        reconvolve_kernel /= np.sum(reconvolve_kernel)
+        #reconvolve_kernel = np.exp((-0.5 / 1.0**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
+        #reconvolve_kernel /= np.sum(reconvolve_kernel)
     # do the full inference
     for pindex in (1, 2, 3, 4, 5):
         savefn = "pass%1d.fits" % pindex
@@ -475,8 +473,7 @@ if __name__ == '__main__':
                 if alpha > 0.25: alpha = 0.25
                 data += sky # hack
                 psf, scene = inference_step(data, scene, alpha,
-                                            1./4., 4. * alpha, nn,
-                                            reconvolve=reconvolve_kernel,
+                                            1./4., nn, reconvolve=reconvolve_kernel,
                                             plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
                 print bigdata.shape, data.shape, psf.shape, scene.shape
             save_scene(scene, savefn)
