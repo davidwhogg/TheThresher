@@ -425,66 +425,53 @@ if __name__ == '__main__':
         size = 64
         sky = 7.
     # do the full inference
-    pindex = 1
-    for count, img in enumerate(Image.get_all(bp=bp, center=center)):
-        bigdata = 1. * img.image
-        print "__main__: bigdata median", np.median(bigdata)
-        img._image = None # clear space?
-        assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
-        if count == 0:
-            # initialization is insane here; this could be improved
-            # NOTE MAGIC NUMBERS
-            borderx = (bigdata.shape[0] - size) / 2
-            bordery = borderx
-            if binary:
-                borderx, bordery = 42, 65 # hard coded MAGIC NUMBERS
-            if trinary:
-                borderx, bordery = 74 + 18, 66 + 18 # hard coded MAGIC NUMBERS
-            data = bigdata[borderx : borderx + size, bordery : bordery + size]
-            dataShape = data.shape
-            scene = convolve(data, defaultpsf, mode="full")
-            foo = convolve(bigdata, scene, mode="valid")
-            mi = np.argmax(foo)
-            x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
-            scene = convolve(data, defaultpsf, mode="full")
-            scene -= np.median(scene)
-            scene = np.clip(scene, 0.0, np.Inf)
-        else:
-            assert((bigdata.shape[0] - scene.shape[0]) > 20) # if this difference isn't large, the centroiding is useless
-            smoothscene = convolve(scene, defaultpsf, mode="same")
-            mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
-            xc, yc = (mi / foo.shape[1]) - x0, (mi % foo.shape[1]) - y0
-            print "__main__: got centroid shift", (xc, yc)
-            data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
-        assert(data.shape == dataShape) # if this isn't true then some edges got hit
-        alpha = 2. / (1. + float(count))
-        if alpha > 0.25: alpha = 0.25
-        data += sky # hack
-        psf, scene = inference_step(data, scene, alpha,
-                                    1./4., 4. * alpha, True,
-                                    plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
-        print bigdata.shape, data.shape, psf.shape, scene.shape
-    savefn = "pass%1d.fits" % pindex
-    save_scene(scene, savefn)
-    # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
-    for pindex in (2, 3, 4, 5):
-        scene = read_scene(savefn)
-        scene -= np.median(scene) # hack
-        for count, img in enumerate(Image.get_all(bp=bp, center=center)):
-            bigdata = 1. * img.image
-            print "__main__: bigdata median", np.median(bigdata)
-            img._image = None # clear space?
-            assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
-            assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
-            smoothscene = convolve(scene, defaultpsf, mode="same")
-            mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
-            xc, yc = (mi / foo.shape[1]) - x0, (mi % foo.shape[1]) - y0
-            print "__main__: got centroid shift", count, (xc, yc)
-            data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
-            assert(data.shape == dataShape) # if this isn't true then some edges got hit
-            data += sky # hack
-            psf, scene = inference_step(data, scene, alpha,
-                                        1./4., 4. * alpha, False,
-                                        plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
+    for pindex in (1, 2, 3, 4, 5):
         savefn = "pass%1d.fits" % pindex
-        save_scene(scene, savefn)
+        if os.path.exists(savefn):
+            scene = read_scene(savefn)
+        else:
+            for count, img in enumerate(Image.get_all(bp=bp, center=center)):
+                bigdata = 1. * img.image
+                print "__main__: bigdata median", np.median(bigdata)
+                img._image = None # clear space?
+                assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
+                if count == 0:
+                    # initialization is insane here; this could be improved
+                    # NOTE MAGIC NUMBERS
+                    borderx = (bigdata.shape[0] - size) / 2
+                    bordery = borderx
+                    if binary:
+                        borderx, bordery = 42, 65 # hard coded MAGIC NUMBERS
+                    if trinary:
+                        borderx, bordery = 74 + 18, 66 + 18 # hard coded MAGIC NUMBERS
+                    data = bigdata[borderx : borderx + size, bordery : bordery + size]
+                    dataShape = data.shape
+                    if pindex == 1: # initialize scene -- should be its own function
+                        scene = convolve(data, defaultpsf, mode="full")
+                        scene -= np.median(scene)
+                        scene = np.clip(scene, 0.0, np.Inf)
+                    foo = convolve(bigdata, scene, mode="valid")
+                    mi = np.argmax(foo)
+                    x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
+                else:
+                    assert((bigdata.shape[0] - scene.shape[0]) > 20) # if this difference isn't large, the centroiding is useless
+                    smoothscene = convolve(scene, defaultpsf, mode="same")
+                    mi = np.argmax(convolve(bigdata, smoothscene, mode="valid"))
+                    xc, yc = (mi / foo.shape[1]) - x0, (mi % foo.shape[1]) - y0
+                    print "__main__: got centroid shift", (xc, yc)
+                    data = bigdata[borderx + xc : borderx + xc + size, bordery + yc : bordery + yc + size]
+                assert(data.shape == dataShape) # if this isn't true then some edges got hit
+                if pindex == 1:
+                    alpha = 2. / (1. + float(count))
+                    nn = True
+                else:
+                    alpha = 2. / 300. # HACK-O-RAMA
+                    nn = False
+                    scene -= np.median(scene) # hack
+                if alpha > 0.25: alpha = 0.25
+                data += sky # hack
+                psf, scene = inference_step(data, scene, alpha,
+                                            1./4., 4. * alpha, nn,
+                                            plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
+                print bigdata.shape, data.shape, psf.shape, scene.shape
+            save_scene(scene, savefn)
