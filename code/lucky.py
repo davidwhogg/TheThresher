@@ -260,7 +260,7 @@ def plot_inference_step(data, thisScene, thisPsf, newScene, filename):
     bigPsf = np.zeros_like(data)
     bigPsf[hw2:hw2+thisPsf.shape[0],hw2:hw2+thisPsf.shape[1]] = thisPsf
     hogg_plot_image(ax4, bigPsf)
-    ax4.set_title("inferred PSF (deconvolved, padded)")
+    ax4.set_title("inferred PSF (deconvolved)")
     hogg_plot_image(ax5, thisScene[hw1:-hw1,hw1:-hw1])
     ax5.set_title("inferred scene (cropped)")
     hogg_plot_image(ax6, newScene[hw1:-hw1,hw1:-hw1])
