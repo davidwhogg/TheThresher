@@ -227,10 +227,10 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, r
         print 'inference_step(): clipped scene to non-negative'
     print 'inference_step(): new scene:', np.min(newScene), np.median(newScene), np.max(newScene)
     if plot is not None:
-        plot_inference_step(data, scene, newPsf, newScene, plot)
+        plot_inference_step(data, thisScene, newPsf, newScene, plot)
     return newPsf, newScene
 
-def plot_inference_step(data, scene, newPsf, newScene, filename):
+def plot_inference_step(data, thisScene, thisPsf, newScene, filename):
     '''
     # `plot_inference_step()`:
 
@@ -248,20 +248,20 @@ def plot_inference_step(data, scene, newPsf, newScene, filename):
         a = np.median(im)
         b = np.max(im)
         return ax.imshow(im, cmap="gray", interpolation="nearest", vmin=(a - 0.2 * (b - a)), vmax=b)
-    hw1 = (newPsf.shape[0] - 1) / 2
-    hw2 = (data.shape[0] - newPsf.shape[0] - 1) / 2
+    hw1 = (thisPsf.shape[0] - 1) / 2
+    hw2 = (data.shape[0] - thisPsf.shape[0] - 1) / 2
     hogg_plot_image(ax1, data)
     ax1.set_title("data")
-    hogg_plot_image(ax2, convolve(scene, newPsf, mode="valid"))
+    hogg_plot_image(ax2, convolve(scene, thisPsf, mode="valid"))
     ax2.set_title(r"[inferred PSF] $\ast$ [previous scene]")
-    hogg_plot_image(ax3, convolve(newScene, newPsf, mode="valid"))
+    hogg_plot_image(ax3, convolve(newScene, thisPsf, mode="valid"))
     ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
     bigPsf = np.zeros_like(data)
-    bigPsf[hw2:hw2+newPsf.shape[0],hw2:hw2+newPsf.shape[1]] = newPsf
+    bigPsf[hw2:hw2+thisPsf.shape[0],hw2:hw2+thisPsf.shape[1]] = thisPsf
     hogg_plot_image(ax4, bigPsf)
     ax4.set_title("inferred PSF (padded)")
-    hogg_plot_image(ax5, scene[hw1:-hw1,hw1:-hw1])
-    ax5.set_title("previous scene (cropped)")
+    hogg_plot_image(ax5, thisScene[hw1:-hw1,hw1:-hw1])
+    ax5.set_title("inferred scene (cropped)")
     hogg_plot_image(ax6, newScene[hw1:-hw1,hw1:-hw1])
     ax6.set_title("updated scene (cropped)")
     hogg_savefig(filename)
