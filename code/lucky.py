@@ -33,6 +33,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 from scipy.signal import convolve
 import scipy.optimize as op
+import pyfits
 
 def xy2index(shape, x, y):
     '''
@@ -273,6 +274,35 @@ def hogg_savefig(fn):
     print "hogg_savefig(): writing %s" % fn
     return plt.savefig(fn)
 
+
+def save_scene(image, fn, clobber=True):
+    '''
+    # `save_scene()`:
+
+    Given an image (2D `numpy.ndarray`) and a file name, write a fits file.
+
+    Optionally, clobber the file if it already exists. NOTE: this is the
+    _default_ behavior here but not in `pyfits`.
+
+    '''
+    if not fn[-5:].lower() == ".fits":
+        fn += ".fits"
+    hdu = pyfits.PrimaryHDU(image)
+    hdu.writeto(fn, clobber=clobber)
+
+
+def read_scene(fn):
+    '''
+    # `read_scene(fn)`:
+
+    Read a scene image from a FITS file and return as a `numpy.ndarray`.
+
+    '''
+    f = pyfits.open(fn)
+    data = np.array(f[0].data, dtype=float)
+    return data
+
+
 def unit_tests():
     '''
     # `unit_tests()`:
@@ -308,6 +338,17 @@ def unit_tests():
     assert(np.all(newPsf <  1.e-3)) # should be more stringent
     assert(np.all(newScene == 0))
     print 'unit_tests(): all tests passed'
+
+    # Unit tests for save/read scene functions.
+    fn = ".unit_test.fits"
+    save_scene(newScene, fn)
+    loadedScene = read_scene(fn)
+    try:
+        os.remove(fn)
+    except:
+        pass
+    assert np.sum(np.abs(newScene - loadedScene) / newScene) < 1e-10
+
     return None
 
 def functional_tests():
@@ -338,6 +379,7 @@ if __name__ == '__main__':
     if "--test" in sys.argv:
         unit_tests()
         ## functional_tests()
+        sys.exit(0)
 
     # Default data path to the Mars dataset.
     bp = os.getenv("LUCKY_DATA", "/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled")
