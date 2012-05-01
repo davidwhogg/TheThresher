@@ -289,7 +289,8 @@ def save_scene(image, fn, clobber=True):
         fn += ".fits"
     hdu = pyfits.PrimaryHDU(image)
     hdu.writeto(fn, clobber=clobber)
-
+    print "save_scene(): wrote %s" % fn
+    return None
 
 def read_scene(fn):
     '''
@@ -300,8 +301,8 @@ def read_scene(fn):
     '''
     f = pyfits.open(fn)
     data = np.array(f[0].data, dtype=float)
+    print "read_scene(): read %s" % fn
     return data
-
 
 def unit_tests():
     '''
@@ -463,8 +464,11 @@ if __name__ == '__main__':
                                     1./4., 4. * alpha, True,
                                     plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
         print bigdata.shape, data.shape, psf.shape, scene.shape
+    savefn = "pass%1d.fits" % pindex
+    save_scene(scene, savefn)
     # now DO IT ALL AGAIN but NOT nonNegative and NOT updating alpha
     for pindex in (2, 3, 4, 5):
+        scene = read_scene(savefn)
         scene -= np.median(scene) # hack
         for count, img in enumerate(Image.get_all(bp=bp, center=center)):
             bigdata = 1. * img.image
@@ -482,9 +486,5 @@ if __name__ == '__main__':
             psf, scene = inference_step(data, scene, alpha,
                                         1./4., 4. * alpha, False,
                                         plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
-
-'''
-# notes:
-- on 2012-04-21 ran with (0., 1./32., True) and then (0., 1./32., False) on 130 images and got reasonable results but some structure around the stars
-- on 2012-04-21 running with (1., 1./32., True) and then (1., 1/32., False) on 130 images...
-'''
+        savefn = "pass%1d.fits" % pindex
+        save_scene(scene, savefn)
