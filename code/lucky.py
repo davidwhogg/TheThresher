@@ -424,6 +424,7 @@ if __name__ == '__main__':
     for pindex in (2, 3, 4, 5):
         for count, img in enumerate(Image.get_all(bp=bp, center=center)):
             bigdata = 1. * img.image
+            print "__main__: bigdata median", np.median(bigdata)
             img._image = None # clear space?
             assert(bigdata.shape[0] == bigdata.shape[1]) # must be square or else something is f**king up
             assert((bigdata.shape[0] - scene.shape[0]) > 30) # if this difference isn't large, the centroiding is useless
