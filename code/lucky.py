@@ -163,24 +163,20 @@ def infer_scene(data, psf, l2norm):
         vals[s] = psfVector
         rows[s] = k
         cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
-    # add entries for sky estimation
-    vals = np.append(vals, np.zeros(data.size))
-    rows = np.append(rows, np.arange(data.size).astype(int))
-    cols = np.append(cols, np.zeros(data.size).astype(int) + sceneSize)
+
     # add entries for L2 norm regularization
     vals = np.append(vals, np.zeros(sceneSize) + l2norm)
     rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
     cols = np.append(cols, np.arange(sceneSize))
-    psfMatrix = csr_matrix((vals, (rows, cols)), shape=(data.size + sceneSize, sceneSize + 1))
+
+    psfMatrix = csr_matrix((vals, (rows, cols)), shape=(data.size + sceneSize, sceneSize))
     print 'infer_scene(): constructed psfMatrix:', min(rows), max(rows), data.size, sceneSize, min(cols), max(cols), sceneSize
 
     # infer scene and return
     dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
-    skyVector = np.zeros(data.size + sceneSize)
     (newScene, istop, niters, r1norm, r2norm, anorm, acond,
      arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
-    print "infer_scene(): dropping sky", newScene[sceneSize]
-    newScene = newScene[:sceneSize].reshape(sceneShape)
+    newScene = newScene.reshape(sceneShape)
     newScene -= np.median(newScene) # hack
     print "infer_scene(): got scene", newScene.shape, np.min(newScene), np.median(newScene), np.max(newScene)
     return newScene
