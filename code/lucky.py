@@ -179,7 +179,6 @@ def infer_scene(data, psf, alpha, oldScene):
     (newScene, istop, niters, r1norm, r2norm, anorm, acond,
      arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
     newScene = newScene.reshape(sceneShape)
-    newScene -= np.median(newScene) # hack
     print "infer_scene(): got scene", newScene.shape, np.min(newScene), np.median(newScene), np.max(newScene)
     return newScene
 
@@ -220,7 +219,9 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, r
     if reconvolve is not None:
         thisScene = convolve(thisScene, reconvolve, mode="same")
     newScene = (1. - alpha) * oldScene + alpha * thisScene
-    if nonNegative: # this is brutal
+    newScene -= np.median(newScene) # brutal hack
+    if nonNegative:
+        # this is ugly but apparently okay
         newScene = np.clip(newScene, 0.0, np.Inf)
         print 'inference_step(): clipped scene to non-negative'
     print 'inference_step(): new scene:', np.min(newScene), np.median(newScene), np.max(newScene)
