@@ -121,7 +121,7 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     print "infer_psf(): got PSF", newPsf.shape, np.min(newPsf), np.median(newPsf), np.max(newPsf)
     return newPsf
 
-def infer_scene(data, psf, l2norm):
+def infer_scene(data, psf, alpha, oldScene):
     '''
     # `infer_scene()`:
 
@@ -137,7 +137,9 @@ def infer_scene(data, psf, l2norm):
 
     * `data`: An individual image.
     * `psf`: A PSF image (used only for shape and size information).
-    * `l2norm`: Amplitude for the (required) L2-norm regularization.
+    * `alpha`: Amplitude for the (required) regularization using the
+      existing scene.
+    * `oldScene`: The existing scene.
 
     ### output:
 
@@ -164,8 +166,8 @@ def infer_scene(data, psf, l2norm):
         rows[s] = k
         cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
 
-    # add entries for L2 norm regularization
-    vals = np.append(vals, np.zeros(sceneSize) + l2norm)
+    # add entries for old-scene-based regularization
+    vals = np.append(vals, np.zeros(sceneSize) + alpha)
     rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
     cols = np.append(cols, np.arange(sceneSize))
 
@@ -173,7 +175,7 @@ def infer_scene(data, psf, l2norm):
     print 'infer_scene(): constructed psfMatrix:', min(rows), max(rows), data.size, sceneSize, min(cols), max(cols), sceneSize
 
     # infer scene and return
-    dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
+    dataVector = np.append(data.reshape(data.size), oldScene.reshape(oldScene.size))
     (newScene, istop, niters, r1norm, r2norm, anorm, acond,
      arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
     newScene = newScene.reshape(sceneShape)
@@ -213,7 +215,7 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, r
     assert(alpha > 0.)
     assert(alpha <= 1.)
     newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
-    thisScene = infer_scene(data, newPsf, sceneL2norm)
+    thisScene = infer_scene(data, newPsf, alpha, oldScene)
     print "inference_step(): updating with", alpha, psfL2norm, sceneL2norm, nonNegative
     if reconvolve is not None:
         thisScene = convolve(thisScene, reconvolve, mode="same")
