@@ -83,7 +83,11 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     # make kernel
     # magic numbers `-0.5` and `(3,-4)` in next line; implicitly sigma = 1. pix Gaussian
     kernel = np.exp(-0.5 * (np.arange(-3,4)[:,None]**2 + np.arange(-3,4)[None,:]**2))
+    kernel /= np.sum(kernel)
     Kx, Ky = kernel.shape
+    tinykernel = np.zeros_like(kernel)
+    tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
+    print tinykernel
 
     # deal with all the size and shape setup
     Nx, Ny = scene.shape
@@ -118,8 +122,9 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     print "infer_psf(): dropping sky level", newPsfParameter[psfParameterSize]
     newPsfParameter = newPsfParameter[:psfParameterSize] # drop sky
     newPsf = convolve(newPsfParameter[::-1].reshape(psfParameterShape), kernel, mode="full")
+    newDeconvolvedPsf = convolve(newPsfParameter[::-1].reshape(psfParameterShape), tinykernel, mode="full")
     print "infer_psf(): got PSF", newPsf.shape, np.min(newPsf), np.median(newPsf), np.max(newPsf)
-    return newPsf
+    return newPsf, newDeconvolvedPsf
 
 def infer_scene(data, psf, l2norm):
     '''
@@ -210,7 +215,7 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, r
     '''
     assert(alpha > 0.)
     assert(alpha <= 1.)
-    newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
+    foo, newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
     thisScene = infer_scene(data, newPsf, sceneL2norm)
     print "inference_step(): updating with", alpha, psfL2norm, nonNegative
     if reconvolve is not None:
@@ -255,7 +260,7 @@ def plot_inference_step(data, thisScene, thisPsf, newScene, filename):
     bigPsf = np.zeros_like(data)
     bigPsf[hw2:hw2+thisPsf.shape[0],hw2:hw2+thisPsf.shape[1]] = thisPsf
     hogg_plot_image(ax4, bigPsf)
-    ax4.set_title("inferred PSF (padded)")
+    ax4.set_title("inferred PSF (deconvolved, padded)")
     hogg_plot_image(ax5, thisScene[hw1:-hw1,hw1:-hw1])
     ax5.set_title("inferred scene (cropped)")
     hogg_plot_image(ax6, newScene[hw1:-hw1,hw1:-hw1])
@@ -423,8 +428,8 @@ if __name__ == '__main__':
     if trinary:
         size = 64
         sky = 7.
-        reconvolve_kernel = np.exp((-0.5 / 1.0**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
-        reconvolve_kernel /= np.sum(reconvolve_kernel)
+        # reconvolve_kernel = np.exp((-0.5 / 1.0**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
+        # reconvolve_kernel /= np.sum(reconvolve_kernel)
     # do the full inference
     for pindex in (1, 2, 3, 4, 5):
         savefn = "pass%1d.fits" % pindex
