@@ -81,7 +81,7 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     * `psf`:
     '''
     # make kernel
-    # magic numbers `-0.5` and `(3,-4)` in next line
+    # magic numbers `-0.5` and `(3,-4)` in next line; implicitly sigma = 1. pix Gaussian
     kernel = np.exp(-0.5 * (np.arange(-3,4)[:,None]**2 + np.arange(-3,4)[None,:]**2))
     Kx, Ky = kernel.shape
 
@@ -185,7 +185,7 @@ def infer_scene(data, psf, l2norm):
     print "infer_scene(): got scene", newScene.shape, np.min(newScene), np.median(newScene), np.max(newScene)
     return newScene
 
-def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, plot=None, runUnitTest=False):
+def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, reconvolve=None, plot=None, runUnitTest=False):
     '''
     # `inference_step()`:
 
@@ -214,11 +214,13 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, p
     * `newPsf`: inferred PSF.
     * `newScene`: updated scene.
     '''
+    assert(alpha > 0.)
+    assert(alpha <= 1.)
     newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
     thisScene = infer_scene(data, newPsf, sceneL2norm)
     print "inference_step(): updating with", alpha, psfL2norm, sceneL2norm, nonNegative
-    assert(alpha > 0.)
-    assert(alpha <= 1.)
+    if reconvolve is not None:
+        thisScene = convolve(thisScene, reconvolve, mode="same")
     newScene = (1. - alpha) * oldScene + alpha * thisScene
     if nonNegative: # this is brutal
         newScene = np.clip(newScene, 0.0, np.Inf)
@@ -421,9 +423,13 @@ if __name__ == '__main__':
     defaultpsf[hw,hw+1] = 1.
     size = 100
     sky = 1.
+    reconvolve_kernel = None
     if trinary:
         size = 64
         sky = 7.
+        reconvolve_kernel = np.exp((-0.5 / 1.5**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
+        reconvolve_kernel /= np.sum(reconvolve_kernel)
+        print reconvolve_kernel
     # do the full inference
     for pindex in (1, 2, 3, 4, 5):
         savefn = "pass%1d.fits" % pindex
@@ -472,6 +478,7 @@ if __name__ == '__main__':
                 data += sky # hack
                 psf, scene = inference_step(data, scene, alpha,
                                             1./4., 4. * alpha, nn,
+                                            reconvolve=reconvolve_kernel,
                                             plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
                 print bigdata.shape, data.shape, psf.shape, scene.shape
             save_scene(scene, savefn)
