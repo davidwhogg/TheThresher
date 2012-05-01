@@ -121,7 +121,7 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     print "infer_psf(): got PSF", newPsf.shape, np.min(newPsf), np.median(newPsf), np.max(newPsf)
     return newPsf
 
-def infer_scene(data, psf, oldReg, oldScene):
+def infer_scene(data, psf, l2norm):
     '''
     # `infer_scene()`:
 
@@ -137,16 +137,14 @@ def infer_scene(data, psf, oldReg, oldScene):
 
     * `data`: An individual image.
     * `psf`: A PSF image (used only for shape and size information).
-    * `oldReg`: Amplitude for the (required) regularization using the
-      existing scene.
-    * `oldScene`: The existing scene.
+    * `l2norm`: Amplitude for the (required) L2 regularization.
 
     ### output:
 
     * `scene`
     '''
     # deal with all the size and shape setup
-    assert(oldReg > 0.)
+    assert(l2norm > 0.)
     Px, Py = data.shape
     Mx, My = psf.shape
     Nx, Ny = (Px + Mx - 1, Py + My - 1)
@@ -167,7 +165,7 @@ def infer_scene(data, psf, oldReg, oldScene):
         cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
 
     # add entries for old-scene-based regularization
-    vals = np.append(vals, np.zeros(sceneSize) + oldReg)
+    vals = np.append(vals, np.zeros(sceneSize) + l2norm)
     rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
     cols = np.append(cols, np.arange(sceneSize))
 
@@ -175,14 +173,15 @@ def infer_scene(data, psf, oldReg, oldScene):
     print 'infer_scene(): constructed psfMatrix:', min(rows), max(rows), data.size, sceneSize, min(cols), max(cols), sceneSize
 
     # infer scene and return
-    dataVector = np.append(data.reshape(data.size), oldScene.reshape(oldScene.size))
+    dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
     (newScene, istop, niters, r1norm, r2norm, anorm, acond,
      arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
     newScene = newScene.reshape(sceneShape)
+    newScene -= np.median(newScene)
     print "infer_scene(): got scene", newScene.shape, np.min(newScene), np.median(newScene), np.max(newScene)
     return newScene
 
-def inference_step(data, oldScene, alpha, psfL2norm, nonNegative, reconvolve=None, plot=None, runUnitTest=False):
+def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, reconvolve=None, plot=None, runUnitTest=False):
     '''
     # `inference_step()`:
 
@@ -212,7 +211,7 @@ def inference_step(data, oldScene, alpha, psfL2norm, nonNegative, reconvolve=Non
     assert(alpha > 0.)
     assert(alpha <= 1.)
     newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
-    thisScene = infer_scene(data, newPsf, (1. / 64.), oldScene)
+    thisScene = infer_scene(data, newPsf, sceneL2norm)
     print "inference_step(): updating with", alpha, psfL2norm, nonNegative
     if reconvolve is not None:
         thisScene = convolve(thisScene, reconvolve, mode="same")
@@ -341,7 +340,7 @@ def unit_tests():
         pass
     assert np.sum(np.abs(scene - loadedScene)) < 1e-10
 
-    newPsf, newScene = inference_step(data, scene, 0.001, runUnitTest=True)
+    newPsf, newScene = inference_step(data, scene, 0.001, 0.001, runUnitTest=True)
     print "psf:", newPsf.shape, np.min(newPsf), np.max(newPsf)
     print "scene:", newScene.shape, np.min(newScene), np.max(newScene)
     # assert(np.all(newPsf >= 0)) # WHY DOES THIS FAIL FOR l_bfgs_b?
@@ -365,10 +364,10 @@ def functional_tests():
     truepsf += 2.  * np.exp(-0.5   * (((np.arange(17)-10)[:,None])**2 + ((np.arange(17)-10)[None,:])**2))
     truedata = convolve(truescene, truepsf, mode="valid")
     data = truedata + 0.03 * np.random.normal(size=(truedata.shape))
-    newPsf, newScene = inference_step(data, truescene, 1., plot="functional01.png")
+    newPsf, newScene = inference_step(data, truescene, 1., 1., plot="functional01.png")
     funkyscene = np.zeros((48, 48))
     funkyscene[15:32,15:32] = truepsf
-    newPsf, newScene = inference_step(data, funkyscene, 1., plot="functional02.png")
+    newPsf, newScene = inference_step(data, funkyscene, 1., 1., plot="functional02.png")
     print 'functional_tests(): all tests run (look at images to assess)'
     return None
 
@@ -424,8 +423,8 @@ if __name__ == '__main__':
     if trinary:
         size = 64
         sky = 7.
-        #reconvolve_kernel = np.exp((-0.5 / 1.0**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
-        #reconvolve_kernel /= np.sum(reconvolve_kernel)
+        reconvolve_kernel = np.exp((-0.5 / 1.0**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
+        reconvolve_kernel /= np.sum(reconvolve_kernel)
     # do the full inference
     for pindex in (1, 2, 3, 4, 5):
         savefn = "pass%1d.fits" % pindex
@@ -473,7 +472,7 @@ if __name__ == '__main__':
                 if alpha > 0.25: alpha = 0.25
                 data += sky # hack
                 psf, scene = inference_step(data, scene, alpha,
-                                            1./4., nn, reconvolve=reconvolve_kernel,
+                                            1./4., 1./64., nn, reconvolve=reconvolve_kernel,
                                             plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
                 print bigdata.shape, data.shape, psf.shape, scene.shape
             save_scene(scene, savefn)
