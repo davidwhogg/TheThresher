@@ -12,6 +12,7 @@ import os
 import numpy as np
 import pyfits
 
+
 class Image(object):
     """
     A simple wrapper around the FITS file for the Mars lucky imaging dataset.
@@ -24,8 +25,8 @@ class Image(object):
     def __init__(self, _id=None, fn=None,
             bp="/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled",
             center=False):
-        self._bp    = bp
-        self.path   = os.path.join(self._bp, fn)
+        self._bp = bp
+        self.path = os.path.join(self._bp, fn)
         self._image = None
         self._center = center
 
@@ -73,11 +74,11 @@ class Image(object):
             yc = data.shape[1] / 2
         self.info['xc'] = xc
         self.info['yc'] = yc
-        self._image = data[xc-hw : xc+hw, yc-hw : yc+hw]
+        self._image = data[xc - hw:xc + hw, yc - hw:yc + hw]
 
         # re-scale flux values for no reason except to make the L2
         # norm more interpretable.
-        rms = np.sqrt(np.mean((self._image - np.mean(self._image))**2))
+        rms = np.sqrt(np.mean((self._image - np.mean(self._image)) ** 2))
         self.info['rms'] = rms
         self._image /= rms
 
@@ -88,4 +89,3 @@ class Image(object):
 
 if __name__ == "__main__":
     print Image.get_all()
-
