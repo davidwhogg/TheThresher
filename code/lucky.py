@@ -188,7 +188,8 @@ def infer_scene(data, psf, l2norm):
     print "infer_scene(): got scene", newScene.shape, np.min(newScene), np.median(newScene), np.max(newScene)
     return newScene
 
-def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, reconvolve=None, plot=None, runUnitTest=False):
+def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative,
+                   reconvolve=None, plot=None, splot=None, runUnitTest=False):
     '''
     # `inference_step()`:
 
@@ -207,6 +208,7 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, r
     * `psfl2norm`: Amplitude of L2 regularization for PSF; units TBA.
     * `nonNegative`: If `True`, apply non-negative clip.  Harsh!.
     * `plot`: If not `None`, make a standard plot with this name.
+    * `splot`: If not `None`, make a hard-stretch plot with this name.
     * `runUnitTest`: If `True`, pass forward unit test requests to
       sub-functions.
 
@@ -231,9 +233,11 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative, r
     print 'inference_step(): new scene:', np.min(newScene), np.median(newScene), np.max(newScene)
     if plot is not None:
         plot_inference_step(data, thisScene, newPsf, newScene, plot)
+    if splot is not None:
+        plot_inference_step(data, thisScene, newPsf, newScene, splot, stretch=3.)
     return newPsf, newScene
 
-def plot_inference_step(data, thisScene, thisPsf, newScene, filename):
+def plot_inference_step(data, thisScene, thisPsf, newScene, filename, stretch=1):
     '''
     # `plot_inference_step()`:
 
@@ -247,25 +251,32 @@ def plot_inference_step(data, thisScene, thisPsf, newScene, filename):
     ax4 = fig.add_subplot(234)
     ax5 = fig.add_subplot(235)
     ax6 = fig.add_subplot(236)
-    def hogg_plot_image(ax, im):
+    def hogg_plot_image_histeq(ax, im):
+        shape = im.shape
+        size = im.size
+        foo = np.zeros(size)
+        foo[np.argsort(im.reshape(size))] = np.arange(size)
+        return ax.imshow(foo.reshape(shape), cmap="gray", interpolation="nearest")
+    def hogg_plot_image(ax, im, stretch):
         a = np.median(im)
-        b = np.max(im)
-        return ax.imshow(im, cmap="gray", interpolation="nearest", vmin=(a - 0.2 * (b - a)), vmax=b)
+        b = np.sort(im.reshape(im.size))[0.95 * im.size]
+        return ax.imshow(im, cmap="gray", interpolation="nearest",
+                         vmin=(a - 3. * b / stretch), vmax=(a + 3. * b / stretch))
     hw1 = (thisPsf.shape[0] - 1) / 2
     hw2 = (data.shape[0] - thisPsf.shape[0] - 1) / 2
-    hogg_plot_image(ax1, data)
+    hogg_plot_image(ax1, data, stretch)
     ax1.set_title("data")
-    hogg_plot_image(ax2, convolve(scene, thisPsf, mode="valid"))
+    hogg_plot_image(ax2, convolve(scene, thisPsf, mode="valid"), stretch)
     ax2.set_title(r"[inferred PSF] $\ast$ [previous scene]")
-    hogg_plot_image(ax3, convolve(newScene, thisPsf, mode="valid"))
+    hogg_plot_image(ax3, convolve(newScene, thisPsf, mode="valid"), stretch)
     ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
     bigPsf = np.zeros_like(data)
     bigPsf[hw2:hw2+thisPsf.shape[0],hw2:hw2+thisPsf.shape[1]] = thisPsf
-    hogg_plot_image(ax4, bigPsf)
+    hogg_plot_image(ax4, bigPsf, stretch)
     ax4.set_title("inferred PSF (deconvolved)")
-    hogg_plot_image(ax5, thisScene[hw1:-hw1,hw1:-hw1])
+    hogg_plot_image(ax5, thisScene[hw1:-hw1,hw1:-hw1], stretch)
     ax5.set_title("inferred scene (cropped)")
-    hogg_plot_image(ax6, newScene[hw1:-hw1,hw1:-hw1])
+    hogg_plot_image(ax6, newScene[hw1:-hw1,hw1:-hw1], stretch)
     ax6.set_title("updated scene (cropped)")
     hogg_savefig(filename)
     return None
@@ -478,8 +489,13 @@ if __name__ == '__main__':
                     scene -= np.median(scene) # hack
                 if alpha > 0.25: alpha = 0.25
                 data += sky # hack
+                plot = None
+                splot = None
+                if (count % 10) == 0:
+                    plot = os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count))
+                    splot = os.path.join(img_dir, "pass%1d_%04ds.png" % (pindex, count))
                 psf, scene = inference_step(data, scene, alpha,
                                             1./4., 1./64., nn, reconvolve=reconvolve_kernel,
-                                            plot=os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count)))
+                                            plot=plot, splot=splot)
                 print bigdata.shape, data.shape, psf.shape, scene.shape
             save_scene(scene, savefn)
