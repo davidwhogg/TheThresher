@@ -5,7 +5,7 @@ Note: the filenames are currently _hard-coded_ for this particular project.
 
 """
 
-__all__ = ["Image"]
+__all__ = ["get_image_list", "get_image"]
 
 import os
 
@@ -19,7 +19,7 @@ def get_image_list(bp):
 
     for e in sorted(entries):
         if os.path.splitext(e)[1] == ".fits":
-            r.append(e)
+            r.append(os.path.join(bp, e))
 
     return r
 
