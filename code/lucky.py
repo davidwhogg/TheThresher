@@ -3,21 +3,19 @@ This file is part of the Lucky Imaging project.
 
 issues:
 -------
+- The initialization and optimization is handled in the __main__ code; that's bad.
+- Initialization involves np.median() and np.clip(), as does the first pass (pindex == 1) of optimization.  Insane.
+- There are hard-coded numbers everywhere, especially the stupid "300" and some L2 norms.
 - centroiding is a hack-orama; replace with a function that takes bigdata, scene and does one-d convolves and returns xc, yc
 - sky fitting and display of results when sky has been fit needs to be audited -- should be able to add a sky offset and get IDENTICAL results out.
-- region of binary image set by borderx, bordery; hard-coded! MAGIC NUMBERS
-- Ought to pickle on the fly so as not to repeat labor when re-run?
+- region of image set by borderx, bordery; hard-coded! MAGIC NUMBERS abound.
 - The infer functions ought to take weight vectors -- this would permit dropping data for cross-validation tests and also inclusion of an error model.
-- Centroiding does *not* seem to be working very well.  It is stupid-heuristic.
-- When I try passing jacobian to lev-mar, it doesn't work; I think this is because of the zeroes / infinities that come in near zero flux, but I don't know how to transform the problem to remove these.  And or I could be wrong.  -Hogg
-- Needs to save the PSF and scene inferred from each image.
-- l_bfgs_b non-negative optimization is FAILING (derivative wrong?)
 - I think it memory leaks at least a bit (`Image`s don't get deleted?).
 
 notes:
 ------
-- The L-BFGS-B implementation we are NOT using comes with a citation requirement; see `l_bfgs_b` documentation.
-- Same might be true for the NNLS implementation.
+- The NNLS implementation may require citation.
+- Search code for "hack" and "magic" for issues.
 
 """
 
