@@ -500,8 +500,7 @@ if __name__ == '__main__':
             scene = read_scene(savefn)
         else:
             for count, fn in enumerate(get_image_list(bp)):
-                img = get_image(fn, center=center)
-                bigdata = 1. * img
+                bigdata = get_image(fn, center=center)
                 print "__main__: bigdata median", np.median(bigdata)
                 # must be square or else something is f**king up
                 assert(bigdata.shape[0] == bigdata.shape[1])
@@ -561,3 +560,4 @@ if __name__ == '__main__':
                                             plot=plot, splot=splot)
                 print bigdata.shape, data.shape, psf.shape, scene.shape
             save_scene(scene, savefn)
+            del bigdata
