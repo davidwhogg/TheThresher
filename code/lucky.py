@@ -560,4 +560,5 @@ if __name__ == '__main__':
                                             plot=plot, splot=splot)
                 print bigdata.shape, data.shape, psf.shape, scene.shape
                 del bigdata
+                del data
             save_scene(scene, savefn)

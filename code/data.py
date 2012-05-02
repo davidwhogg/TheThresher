@@ -40,6 +40,7 @@ def get_image(fn, center=False):
         xc = data.shape[0] / 2
         yc = data.shape[1] / 2
     img = data[xc - hw:xc + hw, yc - hw:yc + hw]
+    del data
 
     # re-scale flux values for no reason except to make the L2
     # norm more interpretable.
