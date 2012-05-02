@@ -559,5 +559,5 @@ if __name__ == '__main__':
                                             1. / 4., 1. / 64., nn,
                                             plot=plot, splot=splot)
                 print bigdata.shape, data.shape, psf.shape, scene.shape
+                del bigdata
             save_scene(scene, savefn)
-            del bigdata
