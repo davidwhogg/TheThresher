@@ -501,9 +501,8 @@ if __name__ == '__main__':
         else:
             for count, fn in enumerate(get_image_list(bp)):
                 img = get_image(fn, center=center)
-                bigdata = 1. * img.image
+                bigdata = 1. * img
                 print "__main__: bigdata median", np.median(bigdata)
-                img._image = None  # clear space?
                 # must be square or else something is f**king up
                 assert(bigdata.shape[0] == bigdata.shape[1])
                 if count == 0:
