@@ -444,7 +444,7 @@ def functional_tests():
 if __name__ == '__main__':
     import sys
     import os
-    from data import Image
+    from data import get_image_list, get_image
 
     if "--test" in sys.argv:
         unit_tests()
@@ -499,7 +499,8 @@ if __name__ == '__main__':
         if os.path.exists(savefn):
             scene = read_scene(savefn)
         else:
-            for count, img in enumerate(Image.get_all(bp=bp, center=center)):
+            for count, fn in enumerate(get_image_list(bp)):
+                img = get_image(fn, center=center)
                 bigdata = 1. * img.image
                 print "__main__: bigdata median", np.median(bigdata)
                 img._image = None  # clear space?
