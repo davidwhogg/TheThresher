@@ -200,6 +200,33 @@ dangerous?..
 
 \section{The method and pipeline}
 
+The method is, for each of $N$ data images $D_n$ taken in turn:
+
+1. Use the current scene image $S$ to infer the PSF $\psi_n$ for data
+image $D_n$ by non-negative least squares.  The PSF model at this
+stage is a fixed-grid mixture of $\sigma=1$~pix ($FWHM = 2.35$~pix)
+two-dimensional, circular Gaussians.  In detail, when we infer the
+PSF, we also infer a sky level, and apply a L2 regularization to keep
+the PSF smooth when there are degeneracies.
+
+2. ``Deconvolve'' the PSF by replacing the mixture of Gaussians with a
+mixture of delta-functions, with the same amplitudes.
+
+3. Infer the scene $S_n$ implied by this data image $D_n$ given the
+deconvolved PSF.  This fit is done without constraints except a small
+regularization to deal with the fact that the scene is bigger than the
+data image.
+
+4. Update the scene by combining the current scene $S$ with the newly
+inferred scene $S_n$ according to
+\begin{eqnarray}\displaystyle
+S &\leftarrow& [1-\alpha_n]\,S + \alpha_n\,S_n
+\quad ,
+\end{eqnarray}
+where $\alpha_n$ is either $2/n$ or else $2/N$.  Possibly also apply
+non-negative clipping, sky adjustment, or other constraints or
+regularizations.
+
 \section{Experiments and results}
 
 \section{Discussion}
