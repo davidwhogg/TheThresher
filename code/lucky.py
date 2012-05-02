@@ -205,6 +205,7 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative,
       like `1./nIteration`.
     * `psfl2norm`: Amplitude of L2 regularization for PSF; units TBA.
     * `nonNegative`: If `True`, apply non-negative clip.  Harsh!.
+    * `reconvolve`: Don't ever use this.
     * `plot`: If not `None`, make a standard plot with this name.
     * `splot`: If not `None`, make a hard-stretch plot with this name.
     * `runUnitTest`: If `True`, pass forward unit test requests to
@@ -235,7 +236,7 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative,
         plot_inference_step(data, thisScene, newPsf, newScene, splot, stretch=3.)
     return newPsf, newScene
 
-def plot_inference_step(data, thisScene, thisPsf, newScene, filename, stretch=1):
+def plot_inference_step(data, thisScene, thisPsf, newScene, filename, stretch=None):
     '''
     # `plot_inference_step()`:
 
@@ -249,6 +250,7 @@ def plot_inference_step(data, thisScene, thisPsf, newScene, filename, stretch=1)
     ax4 = fig.add_subplot(234)
     ax5 = fig.add_subplot(235)
     ax6 = fig.add_subplot(236)
+
     def hogg_plot_image_histeq(ax, im):
         shape = im.shape
         size = im.size
@@ -256,10 +258,18 @@ def plot_inference_step(data, thisScene, thisPsf, newScene, filename, stretch=1)
         foo[np.argsort(im.reshape(size))] = np.arange(size)
         return ax.imshow(foo.reshape(shape), cmap="gray", interpolation="nearest")
     def hogg_plot_image(ax, im, stretch):
-        a = np.median(im)
-        b = np.sort(im.reshape(im.size))[0.95 * im.size]
-        return ax.imshow(im, cmap="gray", interpolation="nearest",
-                         vmin=(a - 3. * b / stretch), vmax=(a + 3. * b / stretch))
+        if stretch is None:
+            a = np.median(im)
+            b = np.max(im)
+            vmin = a - b
+            vmax = a + b
+        else:
+            a = np.median(im)
+            b = np.sort(im.reshape(im.size))[0.95 * im.size]
+            vmin = a - 3. * b / stretch
+            vmax = a + 3. * b / stretch
+        return ax.imshow(im, cmap="gray", interpolation="nearest", vmin=vmin, vmax=vmax)
+
     hw1 = (thisPsf.shape[0] - 1) / 2
     hw2 = (data.shape[0] - thisPsf.shape[0] - 1) / 2
     hogg_plot_image(ax1, data, stretch)
@@ -435,12 +445,9 @@ if __name__ == '__main__':
     defaultpsf[hw,hw+1] = 1.
     size = 100
     sky = 1.
-    reconvolve_kernel = None
     if trinary:
         size = 64
         sky = 7.
-        # reconvolve_kernel = np.exp((-0.5 / 1.0**2) * (np.arange(-4,5)[:,None]**2 + np.arange(-4,5)[None,:]**2))
-        # reconvolve_kernel /= np.sum(reconvolve_kernel)
     # do the full inference
     for pindex in (1, 2, 3, 4, 5):
         savefn = "pass%1d.fits" % pindex
@@ -493,7 +500,7 @@ if __name__ == '__main__':
                     plot = os.path.join(img_dir, "pass%1d_%04d.png" % (pindex, count))
                     splot = os.path.join(img_dir, "pass%1d_%04ds.png" % (pindex, count))
                 psf, scene = inference_step(data, scene, alpha,
-                                            1./4., 1./64., nn, reconvolve=reconvolve_kernel,
+                                            1./4., 1./64., nn,
                                             plot=plot, splot=splot)
                 print bigdata.shape, data.shape, psf.shape, scene.shape
             save_scene(scene, savefn)
