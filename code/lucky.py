@@ -444,6 +444,7 @@ def functional_tests():
 if __name__ == '__main__':
     import sys
     import os
+    import gc
     from data import get_image_list, get_image
 
     if "--test" in sys.argv:
@@ -559,6 +560,8 @@ if __name__ == '__main__':
                                             1. / 4., 1. / 64., nn,
                                             plot=plot, splot=splot)
                 print bigdata.shape, data.shape, psf.shape, scene.shape
+                print gc.garbage
+                gc.collect()
                 del bigdata
                 del data
             save_scene(scene, savefn)
