@@ -2,7 +2,6 @@
 
 % to-do
 % -----
-% - cite the paper Marshall sent by email 2012-05-03; ack Marshall
 % - write first draft
 % - make and insert figures
 % - send to Lauer, Marshall, Kendrew, Brandner, Crotts for comments
@@ -56,7 +55,7 @@ data taken with the \LCOGT\ lucky imaging system.
 
 \begin{document}
 
-\textbf{[This document is a very early draft dated 2012-04-23.  Please do not cite it without the permission of the authors.]}
+\textbf{[This document is a very early draft dated 2012-05-03.  Please do not cite it without the permission of the authors.]}
 
 \section{Introduction}
 
@@ -64,7 +63,13 @@ data taken with the \LCOGT\ lucky imaging system.
 
 ...What is speckle imaging and it's poor cousin shift-and-add?..
 
+...Do a demo of traditional lucky imaging (TLI) where we move the
+threshold and see the results change...
+
 ...Why is it that a Real Scientist (TM) commits to Never Throw Away Data (TM)?..
+
+...How are these ideas related to deconvolution \citep{hirsch} and why
+do we want band-limited deconvolution \citep{magain}?..
 
 \section{Imaging generalities}
 
@@ -219,7 +224,8 @@ PSF, we also infer a sky level, and apply a L2 regularization to keep
 the PSF smooth when there are degeneracies.
 
 2. ``Deconvolve'' the PSF by replacing the mixture of Gaussians with a
-mixture of delta-functions, with the same amplitudes.
+mixture of delta-functions, with the same amplitudes.  This follows
+the general idea of band-limited deconvolution \citep{magain}.
 
 3. Infer the scene $S_n$ implied by this data image $D_n$ given the
 deconvolved PSF.  This fit is done without constraints except a small
@@ -241,10 +247,9 @@ regularizations.
 \section{Discussion}
 
 \acknowledgements It is a pleasure to thank Stefan Harmeling
-(T\"ubingen), Michael Hirsch (UCL), and Bernhard Sch\"olkopf
-(T\"ubingen) for introducing us to the ideas in \citet{hirsch}; many
-of the technical ideas in this \documentname\ come from their work.
-We also single out Dustin Lang (CMU) and Robert Lupton (Princeton) for
+(T\"ubingen), Michael Hirsch (UCL), Phil Marshall (Oxford), and
+Bernhard Sch\"olkopf (T\"ubingen) for contributions and comments.  We
+also single out Dustin Lang (CMU) and Robert Lupton (Princeton) for
 special thanks; DWH wouldn't understand anything about imaging if it
 weren't for the many years of discussions.  DWH and DFM were partially
 supported by NASA (grant GRANT NUMBER HERE) and the NSF (grant
@@ -257,6 +262,8 @@ at [URL HERE].
 \begin{thebibliography}{70}
 \bibitem[Hirsch \etal(2011)]{hirsch}
 Hirsch,~M., Harmeling,~S., Sra,~S., Sch\"olkopf,~B., 2011, \aap, 531, A9
+\bibitem[Magain \etal(1998)]{magain}
+Magain,~P., Courbin,~F., Sohy,~S., 1998, \apj, 494, 472 
 \end{thebibliography}
 
 \end{document}
