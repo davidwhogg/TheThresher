@@ -69,7 +69,7 @@ def load_image(fn):
     return data
 
 
-def centroid_image(image, scene):
+def centroid_image(image, scene, size):
     """
     Centroid an image based on the current scene by projecting and
     convolving.
@@ -81,7 +81,10 @@ def centroid_image(image, scene):
     y0 = np.argmax(convolve(ip0, sp0, mode="valid"))
     x0 = np.argmax(convolve(ip1, sp1, mode="valid"))
 
-    return image[x0:x0 + scene.shape[0], y0:y0 + scene.shape[1]]
+    xmin = int(x0 + 0.5 * (scene.shape[0] - size))
+    ymin = int(y0 + 0.5 * (scene.shape[1] - size))
+
+    return image[xmin:xmin + size, ymin:ymin + size]
 
 
 class Scene(object):
@@ -109,10 +112,21 @@ class Scene(object):
         x = np.linspace(-0.5 * size, 0.5 * size, size) ** 2
         r = np.sqrt(x[:, None] + x[None, :])
         self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
+        self.scene = convolve(self.scene, self.default_psf, mode="full")
 
         # L2 norm weights.
         self.psfL2 = 0.25
         self.sceneL2 = 1. / 64.
+
+        # Make the PSF convolution kernel here. There's a bit of black
+        # MAGIC that could probably be fixed. The kernel is implicitly a
+        # `sigma = 1. pix` Gaussian.
+        self.kernel = np.exp(-0.5 * (np.arange(-3, 4)[:, None] ** 2
+            + np.arange(-3, 4)[None, :] ** 2))
+        self.kernel /= np.sum(self.kernel)
+        Kx, Ky = self.kernel.shape
+        self.tinykernel = np.zeros_like(self.kernel)
+        self.tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
 
     @property
     def image_list(self):
@@ -138,7 +152,8 @@ class Scene(object):
             for self.img_number, fn in enumerate(self.image_list):
                 if self.img_number >= current_img:
                     image = load_image(fn)
-                    data = centroid_image(image, self.scene) + self.sky
+                    data = centroid_image(image, self.scene, self.size)
+                    data += self.sky
 
                     # If it's the first pass, `alpha` should decay and we
                     # should use _non-negative_ optimization.
@@ -177,8 +192,7 @@ class Scene(object):
                                 + alpha * self._infer_scene(data)
         self.scene -= np.median(self.scene)  # Crazy hackishness!
 
-        # Hogg: is this right? It seems crazy to subtract off the median and
-        # then clip...
+        # Hogg: is this right?
         if nn:
             self.scene[self.scene < 0] = 0.0
 
@@ -202,30 +216,21 @@ class Scene(object):
         static or passed in.
 
         """
-        # make kernel
-        # magic numbers `-0.5` and `(3,-4)` in next line; implicitly
-        # sigma = 1. pix Gaussian
-        kernel = np.exp(-0.5 * (np.arange(-3, 4)[:, None] ** 2
-            + np.arange(-3, 4)[None, :] ** 2))
-        kernel /= np.sum(kernel)
-        Kx, Ky = kernel.shape
-        tinykernel = np.zeros_like(kernel)
-        tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
+        Kx, Ky = self.kernel.shape
 
         # deal with all the size and shape setup
         Nx, Ny = self.scene.shape
         Px, Py = data.shape
         Mx, My = (Nx - Px + 1, Ny - Py + 1)
-        # psfShape = (Mx, My)
-        # psfSize = Mx * My
         Qx, Qy = (Mx - Kx + 1, My - Ky + 1)
-        assert(Qx > 0)
-        assert(Qy > 0)
+        assert Qx > 0 and Qy > 0, \
+                "The scene must be larger than the data ({0}, {1})" \
+                .format(Qx, Qy)
         psfParameterShape = (Qx, Qy)
         psfParameterSize = Qx * Qy
 
         # build scene matrix from kernel-convolved scene
-        kernelConvolvedScene = convolve(self.scene, kernel, mode="same")
+        kernelConvolvedScene = convolve(self.scene, self.kernel, mode="same")
         sceneMatrix = np.zeros((data.size + psfParameterSize,
                                 psfParameterSize + 1))
         for k in range(psfParameterSize):
@@ -250,11 +255,9 @@ class Scene(object):
         logging.info("Dropping sky level {0} in _infer_psf."
                                     .format(newPsfParameter[psfParameterSize]))
         newPsfParameter = newPsfParameter[:psfParameterSize]  # drop sky
-        # newPsf = convolve(newPsfParameter[::-1].reshape(psfParameterShape),
-        #         kernel, mode="full")
         newDeconvolvedPsf = convolve(
                 newPsfParameter[::-1].reshape(psfParameterShape),
-                tinykernel, mode="full")
+                self.tinykernel, mode="full")
 
         # Save the new PSF.
         self.psf = newDeconvolvedPsf
