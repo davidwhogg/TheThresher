@@ -29,6 +29,7 @@ notes:
 __all__ = ["infer_psf", "inference_step", "save_scene", "read_scene"]
 
 
+import logging
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
@@ -131,15 +132,16 @@ def infer_psf(data, scene, l2norm, runUnitTest=False):
     # infer PSF and return
     dataVector = np.append(data.reshape(data.size), np.zeros(psfParameterSize))
     newPsfParameter, rnorm = op.nnls(sceneMatrix, dataVector)
-    print "infer_psf(): dropping sky level", newPsfParameter[psfParameterSize]
+    logging.info("infer_psf(): dropping sky level {0}"
+                                .format(newPsfParameter[psfParameterSize]))
     newPsfParameter = newPsfParameter[:psfParameterSize]  # drop sky
     newPsf = convolve(newPsfParameter[::-1].reshape(psfParameterShape),
             kernel, mode="full")
     newDeconvolvedPsf = convolve(
             newPsfParameter[::-1].reshape(psfParameterShape),
             tinykernel, mode="full")
-    print "infer_psf(): got PSF", \
-            newPsf.shape, np.min(newPsf), np.median(newPsf), np.max(newPsf)
+    # logging.info("infer_psf(): got PSF: shape: {0}".format(
+    #         newPsf.shape, np.min(newPsf), np.median(newPsf), np.max(newPsf)))
     return newPsf, newDeconvolvedPsf
 
 
@@ -193,8 +195,8 @@ def infer_scene(data, psf, l2norm):
 
     psfMatrix = csr_matrix((vals, (rows, cols)),
             shape=(data.size + sceneSize, sceneSize))
-    print 'infer_scene(): constructed psfMatrix:', min(rows), max(rows), \
-            data.size, sceneSize, min(cols), max(cols), sceneSize
+    # print 'infer_scene(): constructed psfMatrix:', min(rows), max(rows), \
+    #         data.size, sceneSize, min(cols), max(cols), sceneSize
 
     # infer scene and return
     dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
@@ -202,8 +204,8 @@ def infer_scene(data, psf, l2norm):
      arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
     newScene = newScene.reshape(sceneShape)
     newScene -= np.median(newScene)
-    print "infer_scene(): got scene", newScene.shape, np.min(newScene), \
-            np.median(newScene), np.max(newScene)
+    # print "infer_scene(): got scene", newScene.shape, np.min(newScene), \
+    #         np.median(newScene), np.max(newScene)
     return newScene
 
 
@@ -241,7 +243,8 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative,
     assert(alpha <= 1.)
     foo, newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
     thisScene = infer_scene(data, newPsf, sceneL2norm)
-    print "inference_step(): updating with", alpha, psfL2norm, nonNegative
+    logging.info("inference_step(): updating with ({0}, {1}, {2})"
+            .format(alpha, psfL2norm, nonNegative))
     if reconvolve is not None:
         thisScene = convolve(thisScene, reconvolve, mode="same")
     newScene = (1. - alpha) * oldScene + alpha * thisScene
@@ -249,9 +252,9 @@ def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative,
     if nonNegative:
         # this is ugly but apparently okay
         newScene = np.clip(newScene, 0.0, np.Inf)
-        print 'inference_step(): clipped scene to non-negative'
-    print 'inference_step(): new scene:', np.min(newScene), \
-            np.median(newScene), np.max(newScene)
+        logging.info("inference_step(): clipped scene to non-negative")
+    logging.info("inference_step(): new scene min: {0}, max: {2}, mdeian: {3}"
+            .format(np.min(newScene), np.median(newScene), np.max(newScene)))
     # if plot is not None:
     #     plot_inference_step(data, thisScene, newPsf, newScene, plot)
     # if splot is not None:
@@ -274,7 +277,7 @@ def save_scene(image, fn, clobber=True):
         fn += ".fits"
     hdu = pyfits.PrimaryHDU(image)
     hdu.writeto(fn, clobber=clobber)
-    print "save_scene(): wrote %s" % fn
+    logging.info("save_scene(): wrote {0}".format(fn))
     return None
 
 
@@ -287,59 +290,10 @@ def read_scene(fn):
     '''
     f = pyfits.open(fn)
     data = np.array(f[0].data, dtype=float)
-    print "read_scene(): read %s" % fn
+    logging.info("read_scene(): read {0}".format(fn))
     return data
 
 
-def unit_tests():
-    '''
-    # `unit_tests()`:
-
-    Run a set of unit tests.
-    '''
-    shape = (4, 7)
-    Nx, Ny = shape
-    for x in range(Nx):
-        for y in range(Ny):
-            i = xy2index(shape, x, y)
-            assert((x, y) == index2xy(shape, i))
-            assert(i == xy2index(shape, *index2xy(shape, i)))
-    xgrid = np.zeros(shape) + np.arange(Nx)[:, None]
-    ygrid = np.zeros(shape) + np.arange(Ny)[None, :]
-    i1 = xy2index(shape, xgrid, ygrid).astype(int)
-    i2 = np.arange(Nx * Ny).reshape(shape)
-    print i1 - i2
-    assert(np.all((i1 - i2) == 0))
-    x1, y1 = index2xy(shape, i1)
-    print x1 - xgrid
-    print y1 - ygrid
-    assert(np.all((x1 - xgrid) == 0))
-    assert(np.all((y1 - ygrid) == 0))
-    data = np.zeros((50, 50))
-    scene = np.zeros((64, 64))
-    scene[48, 48] = 1.
-
-    # Unit tests for save/read scene functions.
-    fn = ".unit_test.fits"
-    save_scene(scene, fn)
-    loadedScene = read_scene(fn)
-    try:
-        os.remove(fn)
-    except:
-        pass
-    assert np.sum(np.abs(scene - loadedScene)) < 1e-10
-
-    newPsf, newScene = inference_step(data, scene, 0.001, 0.001,
-            runUnitTest=True)
-    print "psf:", newPsf.shape, np.min(newPsf), np.max(newPsf)
-    print "scene:", newScene.shape, np.min(newScene), np.max(newScene)
-    # assert(np.all(newPsf >= 0)) # WHY DOES THIS FAIL FOR l_bfgs_b?
-    assert(np.all(newPsf > -1.e-3))  # should be more stringent
-    assert(np.all(newPsf < 1.e-3))  # should be more stringent
-    assert(np.all(newScene == 0))
-    print 'unit_tests(): all tests passed'
-
-    return None
 
 
 def functional_tests():
@@ -364,7 +318,6 @@ def functional_tests():
     funkyscene[15:32, 15:32] = truepsf
     newPsf, newScene = inference_step(data, funkyscene, 1., 1.,
             plot="functional02.png")
-    print 'functional_tests(): all tests run (look at images to assess)'
     return None
 
 if __name__ == '__main__':
@@ -372,11 +325,6 @@ if __name__ == '__main__':
     import os
     import gc
     from data import get_image_list, get_image
-
-    if "--test" in sys.argv:
-        unit_tests()
-        ## functional_tests()
-        sys.exit(0)
 
     # Default data path to the Mars dataset.
     bp = os.getenv("LUCKY_DATA",
