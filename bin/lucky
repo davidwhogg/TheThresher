@@ -33,7 +33,11 @@ if __name__ == '__main__':
             help="The size of the inferred scene.")
     parser.add_argument("--psf_hw", type=int, default=13,
             help="The half width of the inferred PSF image.")
-    parser.add_argument("--log", type=str, default="lucky.log",
+    parser.add_argument("--sky", type=float, default=1.0,
+            help="The sky level of the images")
+    parser.add_argument("-n", "--npasses", type=int, default=5,
+            help="The number of inference passes to run")
+    parser.add_argument("--log", type=str, default=None,
             help="The filename for the log.")
     parser.add_argument("-v", "--verbose", action="store_true",
             help="Enable verbose logging.")
@@ -49,8 +53,18 @@ if __name__ == '__main__':
     except os.error:
         pass
 
-    logfn = os.path.join(outdir, args.log)
+    # Set up the `logging` module with the settings provided at the command
+    # line.
     loglevel = logging.INFO
     if args.verbose:
         loglevel = logging.DEBUG
-    logging.basicConfig(filename=logfn, level=loglevel)
+    if args.log is None:
+        logging.basicConfig(level=loglevel)
+    else:
+        logfn = os.path.join(outdir, args.log)
+        logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
+
+    # Start the inference.
+    scene = lucky.Scene(args.basepath, outdir, psf_hw=args.psf_hw,
+            size=args.size, sky=args.sky)
+    scene.run_inference(npasses=args.npasses)

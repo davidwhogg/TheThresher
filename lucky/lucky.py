@@ -26,9 +26,9 @@ notes:
 
 """
 
-__all__ = ["infer_psf", "inference_step", "save_scene", "read_scene"]
+__all__ = ["Scene"]
 
-
+import os
 import logging
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -57,385 +57,253 @@ def index2xy(shape, i):
     return ((i / shape[1]), (i % shape[1]))
 
 
-def infer_psf(data, scene, l2norm, runUnitTest=False):
-    '''
-    # `infer_psf()`:
+def load_image(fn):
+    """
+    Get the image data from a FITS file.
 
-    Take data and a current belief about the scene; infer the psf for
-    this image given the scene.  This code infers a sky level
-    simultaneously.  That might seem like a detail, but it matters.
-    There is also a Gaussian-like kernel hard-coded in here that is a
-    problem.
-
-    Note that the returned PSF (`psfShape` in the code) is *larger*
-    than the number of pixels implied by the number of free parameters
-    (`psfParameterShape`).  That is, the PSF it is padded out, because
-    of the aforementioned kernel.
-
-    Bug: There is a reversal (a `[::-1]`) in the code that is not
-    fully understood at present.
-
-    Bug: Shouldn't make the kernels at every call; these should be
-    static or passed in.
-
-    ### input:
-
-    * `data`: An individual image.
-    * `scene`: The current best guess for the scene that (after PSF
-      convolution) generates the image.
-
-    ### output:
-
-    * `psf`:
-    '''
-    # make kernel
-    # magic numbers `-0.5` and `(3,-4)` in next line; implicitly
-    # sigma = 1. pix Gaussian
-    kernel = np.exp(-0.5 * (np.arange(-3, 4)[:, None] ** 2
-        + np.arange(-3, 4)[None, :] ** 2))
-    kernel /= np.sum(kernel)
-    Kx, Ky = kernel.shape
-    tinykernel = np.zeros_like(kernel)
-    tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
-
-    # deal with all the size and shape setup
-    Nx, Ny = scene.shape
-    Px, Py = data.shape
-    Mx, My = (Nx - Px + 1, Ny - Py + 1)
-    # psfShape = (Mx, My)
-    # psfSize = Mx * My
-    Qx, Qy = (Mx - Kx + 1, My - Ky + 1)
-    assert(Qx > 0)
-    assert(Qy > 0)
-    psfParameterShape = (Qx, Qy)
-    psfParameterSize = Qx * Qy
-
-    # build scene matrix from kernel-convolved scene
-    kernelConvolvedScene = convolve(scene, kernel, mode="same")
-    sceneMatrix = np.zeros((data.size + psfParameterSize,
-                            psfParameterSize + 1))
-    for k in range(psfParameterSize):
-        dx, dy = index2xy(psfParameterShape, k)
-        dx -= Qx / 2
-        dy -= Qx / 2
-        sceneMatrix[:data.size, k] = kernelConvolvedScene[
-                (Mx / 2 + dx):(Mx / 2 + dx + Px),
-                (My / 2 + dy): (My / 2 + dy + Py)].reshape(data.size)
-
-    # sky fitting
-    sceneMatrix[:data.size, psfParameterSize] = 1.
-
-    # L2 regularization
-    sceneMatrix[data.size:(data.size + psfParameterSize), :psfParameterSize] \
-            = l2norm * np.identity(psfParameterSize)
-
-    # infer PSF and return
-    dataVector = np.append(data.reshape(data.size), np.zeros(psfParameterSize))
-    newPsfParameter, rnorm = op.nnls(sceneMatrix, dataVector)
-    logging.info("infer_psf(): dropping sky level {0}"
-                                .format(newPsfParameter[psfParameterSize]))
-    newPsfParameter = newPsfParameter[:psfParameterSize]  # drop sky
-    newPsf = convolve(newPsfParameter[::-1].reshape(psfParameterShape),
-            kernel, mode="full")
-    newDeconvolvedPsf = convolve(
-            newPsfParameter[::-1].reshape(psfParameterShape),
-            tinykernel, mode="full")
-    # logging.info("infer_psf(): got PSF: shape: {0}".format(
-    #         newPsf.shape, np.min(newPsf), np.median(newPsf), np.max(newPsf)))
-    return newPsf, newDeconvolvedPsf
-
-
-def infer_scene(data, psf, l2norm):
-    '''
-    # `infer_scene()`:
-
-    Take data and a current belief about the PSF; infer the scene for
-    this image given the PSF.  This code infers a sky level
-    simultaneously.  That might seem like a detail, but it matters.
-
-    Bug: There is a reversal (a `[::-1]`) in the code that is not
-    fully understood at present.  A good guess is that it has
-    something to do with the `convolve()` operation.
-
-    ### input:
-
-    * `data`: An individual image.
-    * `psf`: A PSF image (used only for shape and size information).
-    * `l2norm`: Amplitude for the (required) L2 regularization.
-
-    ### output:
-
-    * `scene`
-    '''
-    # deal with all the size and shape setup
-    assert(l2norm > 0.)
-    Px, Py = data.shape
-    Mx, My = psf.shape
-    Nx, Ny = (Px + Mx - 1, Py + My - 1)
-    sceneShape = (Nx, Ny)
-    sceneSize = Nx * Ny
-
-    # build psf matrix from psf
-    psfX, psfY = index2xy(psf.shape, np.arange(psf.size))
-    psfVector = psf.reshape(psf.size)[::-1]  # HACK
-    vals = np.zeros(data.size * psf.size)
-    rows = np.zeros_like(vals).astype(int)
-    cols = np.zeros_like(vals).astype(int)
-    for k in range(data.size):
-        dx, dy = index2xy(data.shape, k)
-        s = slice(k * psf.size, (k + 1) * psf.size)
-        vals[s] = psfVector
-        rows[s] = k
-        cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
-
-    # add entries for old-scene-based regularization
-    vals = np.append(vals, np.zeros(sceneSize) + l2norm)
-    rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
-    cols = np.append(cols, np.arange(sceneSize))
-
-    psfMatrix = csr_matrix((vals, (rows, cols)),
-            shape=(data.size + sceneSize, sceneSize))
-    # print 'infer_scene(): constructed psfMatrix:', min(rows), max(rows), \
-    #         data.size, sceneSize, min(cols), max(cols), sceneSize
-
-    # infer scene and return
-    dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
-    (newScene, istop, niters, r1norm, r2norm, anorm, acond,
-     arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
-    newScene = newScene.reshape(sceneShape)
-    newScene -= np.median(newScene)
-    # print "infer_scene(): got scene", newScene.shape, np.min(newScene), \
-    #         np.median(newScene), np.max(newScene)
-    return newScene
-
-
-def inference_step(data, oldScene, alpha, psfL2norm, sceneL2norm, nonNegative,
-                   reconvolve=None, plot=None, splot=None, runUnitTest=False):
-    '''
-    # `inference_step()`:
-
-    Concatenation of `infer_psf()` and `infer_scene()`.  Applies
-    `alpha` times the newly inferred scene to `(1. - alpha)` times the
-    old scene.  Possibly also regularizes with L2norm and
-    non-negativity.
-
-    ### inputs:
-
-    * `data`: Image data
-    * `oldScene`: First guess at scene, or scene from previous
-      iteration; must be (substantially) larger than data image.
-    * `alpha`: fraction of a full step to take; should be something
-      like `1./nIteration`.
-    * `psfl2norm`: Amplitude of L2 regularization for PSF; units TBA.
-    * `nonNegative`: If `True`, apply non-negative clip.  Harsh!.
-    * `reconvolve`: Don't ever use this.
-    * `plot`: If not `None`, make a standard plot with this name.
-    * `splot`: If not `None`, make a hard-stretch plot with this name.
-    * `runUnitTest`: If `True`, pass forward unit test requests to
-      sub-functions.
-
-    ### outputs:
-
-    * `newPsf`: inferred PSF.
-    * `newScene`: updated scene.
-    '''
-    assert(alpha > 0.)
-    assert(alpha <= 1.)
-    foo, newPsf = infer_psf(data, oldScene, psfL2norm, runUnitTest=runUnitTest)
-    thisScene = infer_scene(data, newPsf, sceneL2norm)
-    logging.info("inference_step(): updating with ({0}, {1}, {2})"
-            .format(alpha, psfL2norm, nonNegative))
-    if reconvolve is not None:
-        thisScene = convolve(thisScene, reconvolve, mode="same")
-    newScene = (1. - alpha) * oldScene + alpha * thisScene
-    newScene -= np.median(newScene)  # brutal hack
-    if nonNegative:
-        # this is ugly but apparently okay
-        newScene = np.clip(newScene, 0.0, np.Inf)
-        logging.info("inference_step(): clipped scene to non-negative")
-    logging.info("inference_step(): new scene min: {0}, max: {2}, mdeian: {3}"
-            .format(np.min(newScene), np.median(newScene), np.max(newScene)))
-    # if plot is not None:
-    #     plot_inference_step(data, thisScene, newPsf, newScene, plot)
-    # if splot is not None:
-    #     plot_inference_step(data, thisScene, newPsf, newScene, splot,
-    #             stretch=3.)
-    return newPsf, newScene
-
-
-def save_scene(image, fn, clobber=True):
-    '''
-    # `save_scene()`:
-
-    Given an image (2D `numpy.ndarray`) and a file name, write a fits file.
-
-    Optionally, clobber the file if it already exists. NOTE: this is the
-    _default_ behavior here but not in `pyfits`.
-
-    '''
-    if not fn[-5:].lower() == ".fits":
-        fn += ".fits"
-    hdu = pyfits.PrimaryHDU(image)
-    hdu.writeto(fn, clobber=clobber)
-    logging.info("save_scene(): wrote {0}".format(fn))
-    return None
-
-
-def read_scene(fn):
-    '''
-    # `read_scene(fn)`:
-
-    Read a scene image from a FITS file and return as a `numpy.ndarray`.
-
-    '''
+    """
+    logging.info("Loading data file: {0}".format(fn))
     f = pyfits.open(fn)
     data = np.array(f[0].data, dtype=float)
-    logging.info("read_scene(): read {0}".format(fn))
+    f.close()
     return data
 
 
+def centroid_image(image, scene):
+    """
+    Centroid an image based on the current scene by projecting and
+    convolving.
+
+    """
+    ip0, ip1 = np.sum(image, axis=0), np.sum(image, axis=1)
+    sp0, sp1 = np.sum(scene, axis=0), np.sum(scene, axis=1)
+
+    y0 = np.argmax(convolve(ip0, sp0, mode="valid"))
+    x0 = np.argmax(convolve(ip1, sp1, mode="valid"))
+
+    return image[x0:x0 + scene.shape[0], y0:y0 + scene.shape[1]]
 
 
-def functional_tests():
-    '''
-    # `functional_tests()`:
+class Scene(object):
+    """
+    A `Scene` object describes and learns the "true" image from a lucky
+    imaging data stream.
 
-    Run a set of functional tests.
-    '''
-    truescene = np.zeros((48, 48))
-    truescene[23, 26] = 1.
-    truepsf = 1. * np.exp(-0.5 * (((np.arange(17) - 8)[:, None]) ** 2 \
-            + ((np.arange(17) - 5)[None, :]) ** 2))
-    truepsf += 1. * np.exp(-0.125 * (((np.arange(17) - 6)[:, None]) ** 2 \
-            + ((np.arange(17) - 6)[None, :]) ** 2))
-    truepsf += 2. * np.exp(-0.5 * (((np.arange(17) - 10)[:, None]) ** 2 \
-            + ((np.arange(17) - 10)[None, :]) ** 2))
-    truedata = convolve(truescene, truepsf, mode="valid")
-    data = truedata + 0.03 * np.random.normal(size=(truedata.shape))
-    newPsf, newScene = inference_step(data, truescene, 1., 1.,
-            plot="functional01.png")
-    funkyscene = np.zeros((48, 48))
-    funkyscene[15:32, 15:32] = truepsf
-    newPsf, newScene = inference_step(data, funkyscene, 1., 1.,
-            plot="functional02.png")
-    return None
+    """
+    def __init__(self, basepath, outdir, psf_hw=13, size=100, sky=1.):
+        self.basepath = os.path.abspath(basepath)
+        self.outdir = os.path.abspath(outdir)
+        self.psf_hw = psf_hw
+        self.size = size
+        self.sky = sky
 
-if __name__ == '__main__':
-    import sys
-    import os
-    import gc
-    from data import get_image_list, get_image
+        # Initialize the PSF image as a delta function.
+        pd = 2 * psf_hw + 1
+        self.psf = np.zeros((pd, pd))
+        self.psf[psf_hw, psf_hw] = 1.
 
-    # Default data path to the Mars dataset.
-    bp = os.getenv("LUCKY_DATA",
-            "/data2/dfm/lucky/bpl1m001-en07-20120304/unspooled")
-    img_dir = "mars"
-    center = True
-    binary = False
-    trinary = False
-    if "--binary" in sys.argv:
-        bp = os.getenv("BINARY_DATA", "/data2/dfm/lucky/binary")
-        img_dir = "binary"
-        center = False
-        binary = True
-    if "--binary_short" in sys.argv:
-        bp = "/data2/dfm/lucky/binary_short"
-        img_dir = "binary_short"
-        center = False
-        binary = True
-    if "--triple" in sys.argv:
-        bp = os.getenv("TRIPLE_DATA", "/data2/dfm/lucky/triple")
-        img_dir = "triple"
-        center = False
-        trinary = True
+        self.default_psf = np.zeros_like(self.psf)
+        self.default_psf[psf_hw - 2:psf_hw + 2, psf_hw - 1:psf_hw + 2] = 1.
 
-    try:
-        os.makedirs(img_dir)
-    except os.error:
+        # Initialize the scene as a centered Gaussian.
+        x = np.linspace(-0.5 * size, 0.5 * size, size) ** 2
+        r = np.sqrt(x[:, None] + x[None, :])
+        self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
+
+        # L2 norm weights.
+        self.psfL2 = 0.25
+        self.sceneL2 = 1. / 64.
+
+    @property
+    def image_list(self):
+        entries = os.listdir(self.basepath)
+        for e in sorted(entries):
+            if os.path.splitext(e)[1] == ".fits":
+                yield os.path.join(self.basepath, e)
+
+    def run_inference(self, npasses=5, current_pass=0, current_img=0):
+        """
+        Run the full inference on the dataset.
+
+        ## Keyword Arguments
+
+        * `npasses` (int): The number of passes to run.
+        * `current_pass` (int): The pass number to start at. This is used
+          for restarting.
+        * `current_img` (int): The image number to start at on the first
+          pass through the data. This is used for restarting.
+
+        """
+        for self.pass_number in xrange(current_pass, npasses):
+            for self.img_number, fn in enumerate(self.image_list):
+                if self.img_number >= current_img:
+                    image = load_image(fn)
+                    data = centroid_image(image, self.scene) + self.sky
+
+                    # If it's the first pass, `alpha` should decay and we
+                    # should use _non-negative_ optimization.
+                    if self.pass_number == 0:
+                        alpha = min(2. / (1 + self.img_number), 0.25)
+                        nn = True
+                    else:
+                        self.scene -= np.median(self.scene)  # Hackeroni?
+                        alpha = 2. / 300.  # Hack-o-rama?
+                        nn = False
+
+                    self._inference_step(data, alpha, nn)
+                    self._save_state()
+
+            # After one full pass through the data, make sure that the index
+            # of the zeroth image is reset. We only want to start from this
+            # image on the first pass through the data when we're restarting.
+            current_img = 0
+
+    def _inference_step(self, data, alpha, nn):
+        """
+        Concatenation of `_infer_psf()` and `_infer_scene()`.  Applies
+        `alpha` times the newly inferred scene to `(1. - alpha)` times the
+        old scene.
+
+        ## Arguments
+
+        * `data` (numpy.ndarray): The new image.
+        * `alpha` (float): The weight of the new scene.
+        * `nn` (bool): Should the update enforce non-negativity?
+
+        """
+        assert 0 < alpha <= 1
+        self._infer_psf(data)
+        self.scene = (1 - alpha) * self.scene \
+                                + alpha * self._infer_scene(data)
+        self.scene -= np.median(self.scene)  # Crazy hackishness!
+
+        # Hogg: is this right? It seems crazy to subtract off the median and
+        # then clip...
+        if nn:
+            self.scene[self.scene < 0] = 0.0
+
+    def _infer_psf(self, data):
+        """
+        Take data and a current belief about the scene; infer the psf for
+        this image given the scene.  This code infers a sky level
+        simultaneously.  That might seem like a detail, but it matters.
+        There is also a Gaussian-like kernel hard-coded in here that is a
+        problem.
+
+        Note that the returned PSF (`psfShape` in the code) is *larger*
+        than the number of pixels implied by the number of free parameters
+        (`psfParameterShape`).  That is, the PSF it is padded out, because
+        of the aforementioned kernel.
+
+        Bug: There is a reversal (a `[::-1]`) in the code that is not
+        fully understood at present.
+
+        Bug: Shouldn't make the kernels at every call; these should be
+        static or passed in.
+
+        """
+        # make kernel
+        # magic numbers `-0.5` and `(3,-4)` in next line; implicitly
+        # sigma = 1. pix Gaussian
+        kernel = np.exp(-0.5 * (np.arange(-3, 4)[:, None] ** 2
+            + np.arange(-3, 4)[None, :] ** 2))
+        kernel /= np.sum(kernel)
+        Kx, Ky = kernel.shape
+        tinykernel = np.zeros_like(kernel)
+        tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
+
+        # deal with all the size and shape setup
+        Nx, Ny = self.scene.shape
+        Px, Py = data.shape
+        Mx, My = (Nx - Px + 1, Ny - Py + 1)
+        # psfShape = (Mx, My)
+        # psfSize = Mx * My
+        Qx, Qy = (Mx - Kx + 1, My - Ky + 1)
+        assert(Qx > 0)
+        assert(Qy > 0)
+        psfParameterShape = (Qx, Qy)
+        psfParameterSize = Qx * Qy
+
+        # build scene matrix from kernel-convolved scene
+        kernelConvolvedScene = convolve(self.scene, kernel, mode="same")
+        sceneMatrix = np.zeros((data.size + psfParameterSize,
+                                psfParameterSize + 1))
+        for k in range(psfParameterSize):
+            dx, dy = index2xy(psfParameterShape, k)
+            dx -= Qx / 2
+            dy -= Qx / 2
+            sceneMatrix[:data.size, k] = kernelConvolvedScene[
+                    (Mx / 2 + dx):(Mx / 2 + dx + Px),
+                    (My / 2 + dy): (My / 2 + dy + Py)].reshape(data.size)
+
+        # sky fitting
+        sceneMatrix[:data.size, psfParameterSize] = 1.
+
+        # L2 regularization
+        sceneMatrix[data.size:data.size + psfParameterSize, :psfParameterSize]\
+                = self.psfL2 * np.identity(psfParameterSize)
+
+        # infer PSF and return
+        dataVector = np.append(data.reshape(data.size),
+                np.zeros(psfParameterSize))
+        newPsfParameter, rnorm = op.nnls(sceneMatrix, dataVector)
+        logging.info("Dropping sky level {0} in _infer_psf."
+                                    .format(newPsfParameter[psfParameterSize]))
+        newPsfParameter = newPsfParameter[:psfParameterSize]  # drop sky
+        # newPsf = convolve(newPsfParameter[::-1].reshape(psfParameterShape),
+        #         kernel, mode="full")
+        newDeconvolvedPsf = convolve(
+                newPsfParameter[::-1].reshape(psfParameterShape),
+                tinykernel, mode="full")
+
+        # Save the new PSF.
+        self.psf = newDeconvolvedPsf
+
+    def _infer_scene(self, data):
+        """
+        Take data and a current belief about the PSF; infer the scene for
+        this image given the PSF.  This code infers a sky level
+        simultaneously.  That might seem like a detail, but it matters.
+
+        Bug: There is a reversal (a `[::-1]`) in the code that is not
+        fully understood at present.  A good guess is that it has
+        something to do with the `convolve()` operation.
+
+        """
+        Px, Py = data.shape
+        Mx, My = self.psf.shape
+        Nx, Ny = (Px + Mx - 1, Py + My - 1)
+        sceneShape = (Nx, Ny)
+        sceneSize = Nx * Ny
+
+        # build psf matrix from psf
+        psfX, psfY = index2xy(self.psf.shape, np.arange(self.psf.size))
+        psfVector = self.psf.reshape(self.psf.size)[::-1]  # HACK
+        vals = np.zeros(data.size * self.psf.size)
+        rows = np.zeros_like(vals).astype(int)
+        cols = np.zeros_like(vals).astype(int)
+        for k in range(data.size):
+            dx, dy = index2xy(data.shape, k)
+            s = slice(k * self.psf.size, (k + 1) * self.psf.size)
+            vals[s] = psfVector
+            rows[s] = k
+            cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
+
+        # add entries for old-scene-based regularization
+        vals = np.append(vals, np.zeros(sceneSize) + self.sceneL2)
+        rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
+        cols = np.append(cols, np.arange(sceneSize))
+
+        psfMatrix = csr_matrix((vals, (rows, cols)),
+                shape=(data.size + sceneSize, sceneSize))
+
+        # infer scene and return
+        dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
+        (newScene, istop, niters, r1norm, r2norm, anorm, acond,
+            arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
+        newScene = newScene.reshape(sceneShape)
+        newScene -= np.median(newScene)
+        return newScene
+
+    def _save_state(self):
         pass
-
-    hw = 13
-    psf = np.zeros((2 * hw + 1, 2 * hw + 1))
-    psf[hw, hw] = 1.
-    defaultpsf = psf
-    defaultpsf[hw, hw] = 1.
-    defaultpsf[hw - 1, hw] = 1.
-    defaultpsf[hw + 1, hw] = 1.
-    defaultpsf[hw, hw - 1] = 1.
-    defaultpsf[hw, hw + 1] = 1.
-    size = 100
-    sky = 1.
-    if trinary:
-        size = 64
-        sky = 7.
-    # do the full inference
-    for pindex in (1, 2, 3, 4, 5):
-        savefn = "pass%1d.fits" % pindex
-        if os.path.exists(savefn):
-            scene = read_scene(savefn)
-        else:
-            for count, fn in enumerate(get_image_list(bp)):
-                bigdata = get_image(fn, center=center)
-                print "__main__: bigdata median", np.median(bigdata)
-                # must be square or else something is f**king up
-                assert(bigdata.shape[0] == bigdata.shape[1])
-                if count == 0:
-                    # initialization is insane here; this could be improved
-                    # NOTE MAGIC NUMBERS
-                    borderx = (bigdata.shape[0] - size) / 2
-                    bordery = borderx
-                    if binary:
-                        borderx, bordery = 42, 65  # hard coded MAGIC NUMBERS
-                    if trinary:
-                        # hard coded MAGIC NUMBERS
-                        borderx, bordery = 74 + 18, 66 + 18
-                    data = bigdata[borderx:borderx + size,
-                                   bordery:bordery + size]
-                    dataShape = data.shape
-                    # initialize scene -- should be its own function
-                    if pindex == 1:
-                        scene = convolve(data, defaultpsf, mode="full")
-                        scene -= np.median(scene)
-                        scene = np.clip(scene, 0.0, np.Inf)
-                    foo = convolve(bigdata, scene, mode="valid")
-                    mi = np.argmax(foo)
-                    x0, y0 = mi / foo.shape[1], mi % foo.shape[1]
-                else:
-                    # if this difference isn't large, the centroiding is
-                    # useless
-                    assert((bigdata.shape[0] - scene.shape[0]) > 20)
-                    smoothscene = convolve(scene, defaultpsf, mode="same")
-                    mi = np.argmax(convolve(bigdata, smoothscene,
-                        mode="valid"))
-                    xc, yc = (mi / foo.shape[1]) - x0, (mi % foo.shape[1]) - y0
-                    print "__main__: got centroid shift", (xc, yc)
-                    data = bigdata[borderx + xc:borderx + xc + size,
-                                   bordery + yc:bordery + yc + size]
-                # if this isn't true then some edges got hit
-                assert(data.shape == dataShape)
-                if pindex == 1:
-                    alpha = 2. / (1. + float(count))
-                    nn = True
-                else:
-                    alpha = 2. / 300.  # HACK-O-RAMA
-                    nn = False
-                    scene -= np.median(scene)  # hack
-                if alpha > 0.25:
-                    alpha = 0.25
-                data += sky  # hack
-                plot = None
-                splot = None
-                if (count % 10) == 0:
-                    plot = os.path.join(img_dir, "pass%1d_%04d.png"
-                            % (pindex, count))
-                    splot = os.path.join(img_dir, "pass%1d_%04ds.png"
-                            % (pindex, count))
-                psf, scene = inference_step(data, scene, alpha,
-                                            1. / 4., 1. / 64., nn,
-                                            plot=plot, splot=splot)
-                print bigdata.shape, data.shape, psf.shape, scene.shape
-                print gc.garbage
-                gc.collect()
-                del bigdata
-                del data
-            save_scene(scene, savefn)
