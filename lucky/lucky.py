@@ -30,11 +30,15 @@ __all__ = ["Scene"]
 
 import os
 import logging
+import sqlite3
+
 import numpy as np
+
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 from scipy.signal import convolve
 import scipy.optimize as op
+
 import pyfits
 
 
@@ -131,6 +135,17 @@ class Scene(object):
         self.tinykernel = np.zeros_like(self.kernel)
         self.tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
 
+        # The `sqlite` database object that will save the current state.
+        self.db = sqlite3.connect(os.path.join(self.outdir, ".state.db"))
+
+    def _setup_db(self):
+        c = self.db.cursor()
+        c.execute("drop table if exists states")
+        c.execute("""create table states
+                (id text primary key, infile text, outfile text)""")
+        self.db.commit()
+        c.close()
+
     @property
     def image_list(self):
         entries = os.listdir(self.basepath)
@@ -151,10 +166,14 @@ class Scene(object):
           pass through the data. This is used for restarting.
 
         """
+        # If we're not restarting, wipe and setup the database.
+        if current_pass == 0 and current_img == 0:
+            self._setup_db()
+
         for self.pass_number in xrange(current_pass, npasses):
-            for self.img_number, fn in enumerate(self.image_list):
+            for self.img_number, self.fn in enumerate(self.image_list):
                 if self.img_number >= current_img:
-                    image = load_image(fn)
+                    image = load_image(self.fn)
                     data = centroid_image(image, self.scene, self.size)
                     data += self.sky
 
@@ -321,17 +340,14 @@ class Scene(object):
         return newScene
 
     def _save_state(self, data):
-        import matplotlib.pyplot as pl
+        _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
+        outfn = os.path.join(self.outdir, _id + ".fits")
 
-        pl.figure(figsize=(12, 8))
-        pl.subplot(131)
-        pl.imshow(self.scene[self.psf_hw:-self.psf_hw,
-                             self.psf_hw:-self.psf_hw],
-                interpolation="nearest", cmap="gray")
-        pl.subplot(132)
-        pl.imshow(self.psf, interpolation="nearest", cmap="gray")
-        pl.subplot(133)
-        pl.imshow(data, interpolation="nearest", cmap="gray")
-        pl.savefig(os.path.join(self.outdir,
-            "{0}-{1:04d}.png".format(self.pass_number, self.img_number)))
-        pl.close()
+        hdus = [pyfits.PrimaryHDU(self.scene), pyfits.ImageHDU(self.psf)]
+
+        pyfits.HDUList(hdus).writeto(outfn, clobber=True)
+
+        c = self.db.cursor()
+        c.execute("insert into states values (?,?,?)", [_id, self.fn, outfn])
+        self.db.commit()
+        c.close()
