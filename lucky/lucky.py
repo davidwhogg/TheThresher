@@ -84,6 +84,9 @@ def centroid_image(image, scene, size):
     xmin = int(x0 + 0.5 * (scene.shape[0] - size))
     ymin = int(y0 + 0.5 * (scene.shape[1] - size))
 
+    logging.info("Got image center {0}, {1}"
+            .format(xmin + 0.5 * size, ymin + 0.5 * size))
+
     return image[xmin:xmin + size, ymin:ymin + size]
 
 
@@ -166,7 +169,7 @@ class Scene(object):
                         nn = False
 
                     self._inference_step(data, alpha, nn)
-                    self._save_state()
+                    self._save_state(image)
 
             # After one full pass through the data, make sure that the index
             # of the zeroth image is reset. We only want to start from this
@@ -259,6 +262,10 @@ class Scene(object):
                 newPsfParameter[::-1].reshape(psfParameterShape),
                 self.tinykernel, mode="full")
 
+        logging.info("Got PSF {0}. Min: {1}, Median: {2}, Max: {3}"
+                .format(newDeconvolvedPsf.shape, newDeconvolvedPsf.min(),
+                    np.median(newDeconvolvedPsf), newDeconvolvedPsf.max()))
+
         # Save the new PSF.
         self.psf = newDeconvolvedPsf
 
@@ -306,7 +313,25 @@ class Scene(object):
             arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
         newScene = newScene.reshape(sceneShape)
         newScene -= np.median(newScene)
+
+        logging.info("Got scene {0}, Min: {1}, Median: {2}, Max: {3}"
+                .format(newScene.shape, newScene.min(), np.median(newScene),
+                    newScene.max()))
+
         return newScene
 
-    def _save_state(self):
-        pass
+    def _save_state(self, data):
+        import matplotlib.pyplot as pl
+
+        pl.figure(figsize=(12, 8))
+        pl.subplot(131)
+        pl.imshow(self.scene[self.psf_hw:-self.psf_hw,
+                             self.psf_hw:-self.psf_hw],
+                interpolation="nearest", cmap="gray")
+        pl.subplot(132)
+        pl.imshow(self.psf, interpolation="nearest", cmap="gray")
+        pl.subplot(133)
+        pl.imshow(data, interpolation="nearest", cmap="gray")
+        pl.savefig(os.path.join(self.outdir,
+            "{0}-{1:04d}.png".format(self.pass_number, self.img_number)))
+        pl.close()
