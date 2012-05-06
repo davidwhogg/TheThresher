@@ -474,6 +474,11 @@ if __name__ == '__main__':
         img_dir = "triple"
         center = False
         trinary = True
+    if "--triple_all" in sys.argv:
+        bp = os.getenv("TRIPLE_DATA", "/data2/dfm/lucky/triple_all")
+        img_dir = "triple_all"
+        center = False
+        trinary = True
 
     try:
         os.makedirs(img_dir)
@@ -541,7 +546,10 @@ if __name__ == '__main__':
                 assert(data.shape == dataShape)
                 if pindex == 1:
                     alpha = 2. / (1. + float(count))
-                    nn = True
+                    if count < 128:
+                        nn = True
+                    else:
+                        nn = False
                 else:
                     alpha = 2. / 300.  # HACK-O-RAMA
                     nn = False
@@ -559,8 +567,6 @@ if __name__ == '__main__':
                 psf, scene = inference_step(data, scene, alpha,
                                             1. / 4., 1. / 64., nn,
                                             plot=plot, splot=splot)
-                print bigdata.shape, data.shape, psf.shape, scene.shape
-                print gc.garbage
                 gc.collect()
                 del bigdata
                 del data
