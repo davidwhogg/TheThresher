@@ -7,13 +7,36 @@ from scipy.signal import convolve
 import matplotlib.pyplot as plt
 
 
+def hogg_plot_image_histeq(ax, im):
+    shape = im.shape
+    size = im.size
+    foo = np.zeros(size)
+    foo[np.argsort(im.reshape(size))] = np.arange(size)
+    return ax.imshow(foo.reshape(shape), cmap="gray",
+            interpolation="nearest")
+
+
+def hogg_plot_image(ax, im, stretch):
+    if stretch is None:
+        a = np.median(im)
+        b = np.max(im)
+        vmin = a - b
+        vmax = a + b
+    else:
+        a = np.median(im)
+        b = np.sort(im.reshape(im.size))[0.95 * im.size]
+        vmin = a - 3. * b / stretch
+        vmax = a + 3. * b / stretch
+    return ax.imshow(im, cmap="gray", interpolation="nearest", vmin=vmin,
+            vmax=vmax)
+
+
 def plot_inference_step(data, thisScene, thisPsf, newScene, filename,
         stretch=None):
-    '''
-    # `plot_inference_step()`:
-
+    """
     Make plots for `inference_step()`.
-    '''
+
+    """
     fig = plt.figure(figsize=(12, 8))
     plt.clf()
     ax1 = fig.add_subplot(231)
@@ -23,28 +46,6 @@ def plot_inference_step(data, thisScene, thisPsf, newScene, filename,
     ax4 = fig.add_subplot(234)
     ax5 = fig.add_subplot(235)
     ax6 = fig.add_subplot(236)
-
-    def hogg_plot_image_histeq(ax, im):
-        shape = im.shape
-        size = im.size
-        foo = np.zeros(size)
-        foo[np.argsort(im.reshape(size))] = np.arange(size)
-        return ax.imshow(foo.reshape(shape), cmap="gray",
-                interpolation="nearest")
-
-    def hogg_plot_image(ax, im, stretch):
-        if stretch is None:
-            a = np.median(im)
-            b = np.max(im)
-            vmin = a - b
-            vmax = a + b
-        else:
-            a = np.median(im)
-            b = np.sort(im.reshape(im.size))[0.95 * im.size]
-            vmin = a - 3. * b / stretch
-            vmax = a + 3. * b / stretch
-        return ax.imshow(im, cmap="gray", interpolation="nearest", vmin=vmin,
-                vmax=vmax)
 
     hw1 = (thisPsf.shape[0] - 1) / 2
     hw2 = (data.shape[0] - thisPsf.shape[0] - 1) / 2
@@ -71,10 +72,9 @@ def plot_inference_step(data, thisScene, thisPsf, newScene, filename,
 
 
 def hogg_savefig(fn):
-    '''
-    # `hogg_savefig()`:
-
+    """
     Hogg likes a verbose `savefig()`!
-    '''
+
+    """
     logging.info("hogg_savefig(): writing {0}".format(fn))
     return plt.savefig(fn)

@@ -181,7 +181,7 @@ class Scene(object):
                         nn = False
 
                     self._inference_step(data, alpha, nn)
-                    self._save_state(image)
+                    self._save_state(data)
 
             # After one full pass through the data, make sure that the index
             # of the zeroth image is reset. We only want to start from this
@@ -338,7 +338,10 @@ class Scene(object):
         _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
         outfn = os.path.join(self.outdir, _id + ".fits")
 
-        hdus = [pyfits.PrimaryHDU(self.scene), pyfits.ImageHDU(self.psf)]
+        hdus = [pyfits.PrimaryHDU(data), pyfits.ImageHDU(self.scene),
+                pyfits.ImageHDU(self.psf)]
+        hdus[0].header.update("datafn", self.fn)
+        hdus[0].header.update("size", self.size)
 
         pyfits.HDUList(hdus).writeto(outfn, clobber=True)
 

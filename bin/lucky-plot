@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 """
-This is the main user entry point for our lucky imaging pipeline.
-
-I hope that the name of this file changes soon!
+This script plots the results of a `lucky` run and it can monitor the output
+directory for real time plotting.
 
 """
 
@@ -11,6 +10,7 @@ import sys
 import logging
 import time
 
+import numpy as np
 import pyfits
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -25,17 +25,23 @@ except ImportError:
     import lucky
 
 
+def plot_state(fn, outdir):
+    hdus = pyfits.open(fn)
+    data = np.array(hdus[0].data, dtype=float)
+    scene = np.array(hdus[1].data, dtype=float)
+    psf = np.array(hdus[2].data, dtype=float)
+    hdus.close()
+
+    imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
+            + ".png")
+    lucky.plot_inference_step(data, scene, psf, scene, imgfn)
+
+
 class PlottingHandler(FileSystemEventHandler):
     def on_any_event(self, event):
         ext = os.path.splitext(event.src_path)[1]
-        print event.src_path
-        if ext.lower() == ".fits":
-            hdus = pyfits.open(event.src_path)
-            scene = hdus[0].data
-            psf = hdus[1].data
-            print scene.shape
-            print psf.shape
-            hdus.close()
+        if ext.lower() == ".fits" and os.path.exists(event.src_path):
+            plot_state(event.src_path, self.outdir)
 
 
 if __name__ == '__main__':
@@ -50,8 +56,10 @@ if __name__ == '__main__':
             help="The directory for the output files.")
     args = parser.parse_args()
 
+    bp = os.path.abspath(args.basepath)
+
     if args.output is None:
-        outdir = args.basepath
+        outdir = bp
     else:
         outdir = args.output
 
@@ -64,11 +72,13 @@ if __name__ == '__main__':
 
     # Start monitoring.
     handler = PlottingHandler()
+    handler.outdir = outdir
     observer = Observer()
-    observer.schedule(handler, path=args.basepath, recursive=True)
+    observer.schedule(handler, path=bp, recursive=True)
+
     observer.start()
 
-    print("Monitoring {0}. Press Ctrl-C to stop.".format(args.basepath))
+    print("Monitoring {0}. Press Ctrl-C to stop.".format(bp))
     try:
         while True:
             time.sleep(1)
