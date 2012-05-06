@@ -3,14 +3,10 @@ This file is part of the Lucky Imaging project.
 
 Issues:
 -------
-- The initialization and optimization is handled in the __main__ code;
-  that's bad.
 - Initialization involves np.median() and np.clip(), as does the first pass
   (pindex == 1) of optimization.  Insane.
 - There are hard-coded numbers everywhere, especially the stupid "300" and
   some L2 norms.
-- centroiding is a hack-orama; replace with a function that takes bigdata,
-  scene and does one-d convolves and returns xc, yc
 - sky fitting and display of results when sky has been fit needs to be
   audited -- should be able to add a sky offset and get IDENTICAL results out.
 - region of image set by borderx, bordery; hard-coded! MAGIC NUMBERS abound.
@@ -18,6 +14,7 @@ Issues:
   dropping data for cross-validation tests and also inclusion of an error
   model.
 - I think it memory leaks at least a bit (`Image`s don't get deleted?).
+    The leak is somewhere in all the convolving, etc. in the inference steps
 
 notes:
 ------
@@ -31,6 +28,7 @@ __all__ = ["Scene"]
 import os
 import logging
 import sqlite3
+import gc
 
 import numpy as np
 
@@ -43,21 +41,16 @@ import pyfits
 
 
 def xy2index(shape, x, y):
-    '''
-    # `xy2index()`:
-
+    """
     Go from x,y position in a 2-d numpy array to one-d index in the
     flattened 1-d array.
-    '''
+
+    """
     return (x * shape[1] + y)
 
 
 def index2xy(shape, i):
-    '''
-    # `index2xy()`:
-
-    Inverse of `xy2index()`.
-    '''
+    """Inverse of `xy2index()`."""
     return ((i / shape[1]), (i % shape[1]))
 
 
@@ -336,6 +329,8 @@ class Scene(object):
         logging.info("Got scene {0}, Min: {1}, Median: {2}, Max: {3}"
                 .format(newScene.shape, newScene.min(), np.median(newScene),
                     newScene.max()))
+
+        gc.collect()
 
         return newScene
 
