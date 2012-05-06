@@ -9,6 +9,7 @@ import os
 import sys
 import logging
 import time
+import glob
 
 import numpy as np
 import pyfits
@@ -54,6 +55,8 @@ if __name__ == '__main__':
             help="The directory to monitor.")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The directory for the output files.")
+    parser.add_argument("-m", "--monitor", action="store_true",
+            help="Monitor the directory and plot in real time")
     args = parser.parse_args()
 
     bp = os.path.abspath(args.basepath)
@@ -70,18 +73,22 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.INFO)
 
-    # Start monitoring.
-    handler = PlottingHandler()
-    handler.outdir = outdir
-    observer = Observer()
-    observer.schedule(handler, path=bp, recursive=True)
+    if args.monitor:
+        # Start monitoring.
+        handler = PlottingHandler()
+        handler.outdir = outdir
+        observer = Observer()
+        observer.schedule(handler, path=bp, recursive=True)
 
-    observer.start()
+        observer.start()
 
-    print("Monitoring {0}. Press Ctrl-C to stop.".format(bp))
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+        print("Monitoring {0}. Press Ctrl-C to stop.".format(bp))
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            observer.stop()
+        observer.join()
+    else:
+        for f in glob.glob(os.path.join(bp, "*.fits")):
+            plot_state(f, outdir)
