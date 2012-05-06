@@ -1,0 +1,77 @@
+#!/usr/bin/env python
+"""
+This is the main user entry point for our lucky imaging pipeline.
+
+I hope that the name of this file changes soon!
+
+"""
+
+import os
+import sys
+import logging
+import time
+
+import pyfits
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+# This heinous hack let's me run this script without actually installing the
+# `lucky` package. I learned this from Steve Losh at:
+#     https://github.com/sjl/d/blob/master/bin/d
+try:
+    import lucky
+except ImportError:
+    sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+    import lucky
+
+
+class PlottingHandler(FileSystemEventHandler):
+    def on_any_event(self, event):
+        ext = os.path.splitext(event.src_path)[1]
+        print event.src_path
+        if ext.lower() == ".fits":
+            hdus = pyfits.open(event.src_path)
+            scene = hdus[0].data
+            psf = hdus[1].data
+            print scene.shape
+            print psf.shape
+            hdus.close()
+
+
+if __name__ == '__main__':
+    import argparse
+
+    # Start by parsing the command line arguments.
+    desc = "Monitor a directory for new FITS files and plot the inference."
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument("basepath", type=str,
+            help="The directory to monitor.")
+    parser.add_argument("-o", "--output", type=str, default=None,
+            help="The directory for the output files.")
+    args = parser.parse_args()
+
+    if args.output is None:
+        outdir = args.basepath
+    else:
+        outdir = args.output
+
+    try:
+        os.makedirs(outdir)
+    except os.error:
+        pass
+
+    logging.basicConfig(level=logging.INFO)
+
+    # Start monitoring.
+    handler = PlottingHandler()
+    observer = Observer()
+    observer.schedule(handler, path=args.basepath, recursive=True)
+    observer.start()
+
+    print("Monitoring {0}. Press Ctrl-C to stop.".format(args.basepath))
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
