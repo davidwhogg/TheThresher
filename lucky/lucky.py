@@ -34,7 +34,7 @@ import numpy as np
 
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
-from scipy.signal import convolve
+from scipy.signal import fftconvolve as convolve
 import scipy.optimize as op
 
 import pyfits
