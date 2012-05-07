@@ -12,6 +12,7 @@ import time
 import glob
 
 import numpy as np
+import matplotlib.pyplot as pl
 import pyfits
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -26,6 +27,9 @@ except ImportError:
     import lucky
 
 
+_fig = pl.figure(figsize=(12, 8))
+
+
 def plot_state(fn, outdir):
     hdus = pyfits.open(fn)
     data = np.array(hdus[0].data, dtype=float)
@@ -35,7 +39,7 @@ def plot_state(fn, outdir):
 
     imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
             + ".png")
-    lucky.plot_inference_step(data, scene, psf, scene, imgfn)
+    lucky.plot_inference_step(_fig, data, scene, psf, scene, imgfn)
 
 
 class PlottingHandler(FileSystemEventHandler):

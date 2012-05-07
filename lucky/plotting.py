@@ -31,14 +31,13 @@ def hogg_plot_image(ax, im, stretch):
             vmax=vmax)
 
 
-def plot_inference_step(data, thisScene, thisPsf, newScene, filename,
+def plot_inference_step(fig, data, thisScene, thisPsf, newScene, filename,
         stretch=None):
     """
     Make plots for `inference_step()`.
 
     """
-    fig = plt.figure(figsize=(12, 8))
-    plt.clf()
+    fig.clf()
     ax1 = fig.add_subplot(231)
 
     ax2 = fig.add_subplot(232)
