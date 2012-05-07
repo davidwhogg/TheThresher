@@ -7,6 +7,7 @@ lucky-imaging solution needs, We Don't Throw Away Data (tm).
 
 - David W. Hogg, New York University
 - Dan Foreman-Mackey, New York University
+- Federica Bianco, Las Cumbres Observatory
 
 ### Notes
 
