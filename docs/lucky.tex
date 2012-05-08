@@ -59,14 +59,53 @@ data taken with the \LCOGT\ lucky imaging system.
 
 \section{Introduction}
 
-...What is lucky imaging traditionally and what are the benefits and costs?..
+High-resolution imaging has seen great success in the last decades,
+with the \project{Hubble Space Telescope}, natural and artificial
+guide-star adaptive optics, and lucky imaging.  Lucky imaging is
+possible with very inexpensive equipment, but as a technique it is not
+inexpensive because it involves so much waste.
+
+The idea behind traditional lucky imaging is that typical, smooth
+atmospheric seeing is a time average of a rapidly varying, multi-modal
+point-spread function.  If you take images rapidly with a very fast
+camera, occasionally the atmosphere will---just through
+chance---produce a nearly diffraction-limited image.  That is,
+occasionally the wavefront distortions from the atmosphere will come
+close to canceling (or really cancelling the imperfections in your
+real telescope).  In a lucky imaging run, you take an enormous number
+of short frames and \emph{throw almost all of them away}.  The
+resulting average, stack, or co-add of the best images can have very
+high angular resolution.  It can't have very high signal-to-noise,
+simply because so little data in the end get used (typically much less
+than one percent), but it can be very good for making measurements
+that require high spatial resolution.
+
+Lucky imaging is straightforward---and very simple to implement---but
+it violates one very important principle of empirical science: There
+is no way that \emph{throwing away} non-corrupted data can give you
+\emph{more information}.  It might be that doing something heuristic
+with bad data will make your results worse, but if you are doing
+something probabilistically justifiable, no datum can be
+\emph{negatively informative}.  The worst a datum can be is useless.
+There can't ever be an inferential justification---other than
+pragmatic---for discarding any relevant data.
+
+In the case of lucky imaging, the fundamental reason that throwing
+away data helps is that the core data analysis step is co-addition of
+the imaging, which (though widely used in astronomy) is not
+justifiable when the point-spread function is varying rapidly.  Lucky
+imaging is also very sensible operationally: It provides results
+rapidly (even on-the-fly during the observing run), and permits
+analysis of enormous data sets without enormous computation (for
+example, it can be implemented in map-reduce).  What we are about to
+propose will not be as fast or as computationally efficient.  It will,
+however, be justifiable within probabilistic data analysis and will
+make use of every datum.
 
 ...What is speckle imaging and it's poor cousin shift-and-add?..
 
 ...Do a demo of traditional lucky imaging (TLI) where we move the
 threshold and see the results change...
-
-...Why is it that a Real Scientist (TM) commits to Never Throw Away Data (TM)?..
 
 ...How are these ideas related to deconvolution \citep{hirsch} and why
 do we want band-limited deconvolution \citep{magain}?..

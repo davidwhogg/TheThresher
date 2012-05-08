@@ -27,14 +27,13 @@ __all__ = ["Scene"]
 
 import os
 import logging
-import sqlite3
 import gc
 
 import numpy as np
 
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
-from scipy.signal import convolve
+from scipy.signal import fftconvolve as convolve
 import scipy.optimize as op
 
 import pyfits
@@ -128,17 +127,6 @@ class Scene(object):
         self.tinykernel = np.zeros_like(self.kernel)
         self.tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
 
-        # The `sqlite` database object that will save the current state.
-        self.db = sqlite3.connect(os.path.join(self.outdir, ".state.db"))
-
-    def _setup_db(self):
-        c = self.db.cursor()
-        c.execute("drop table if exists states")
-        c.execute("""create table states
-                (id text primary key, infile text, outfile text)""")
-        self.db.commit()
-        c.close()
-
     @property
     def image_list(self):
         entries = os.listdir(self.basepath)
@@ -159,10 +147,6 @@ class Scene(object):
           pass through the data. This is used for restarting.
 
         """
-        # If we're not restarting, wipe and setup the database.
-        if current_pass == 0 and current_img == 0:
-            self._setup_db()
-
         for self.pass_number in xrange(current_pass, npasses):
             for self.img_number, self.fn in enumerate(self.image_list):
                 if self.img_number >= current_img:
@@ -181,7 +165,7 @@ class Scene(object):
                         nn = False
 
                     self._inference_step(data, alpha, nn)
-                    self._save_state(image)
+                    self._save_state(data)
 
             # After one full pass through the data, make sure that the index
             # of the zeroth image is reset. We only want to start from this
@@ -203,6 +187,7 @@ class Scene(object):
         """
         assert 0 < alpha <= 1
         self._infer_psf(data)
+        self.old_scene = np.array(self.scene)
         self.scene = (1 - alpha) * self.scene \
                                 + alpha * self._infer_scene(data)
         self.scene -= np.median(self.scene)  # Crazy hackishness!
@@ -338,11 +323,12 @@ class Scene(object):
         _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
         outfn = os.path.join(self.outdir, _id + ".fits")
 
-        hdus = [pyfits.PrimaryHDU(self.scene), pyfits.ImageHDU(self.psf)]
+        hdus = [pyfits.PrimaryHDU(data), pyfits.ImageHDU(self.old_scene),
+                pyfits.ImageHDU(self.scene), pyfits.ImageHDU(self.psf)]
+
+        hdus[0].header.update("datafn", self.fn)
+        hdus[0].header.update("size", self.size)
+        hdus[1].header.update("status", "old")
+        hdus[2].header.update("status", "new")
 
         pyfits.HDUList(hdus).writeto(outfn, clobber=True)
-
-        c = self.db.cursor()
-        c.execute("insert into states values (?,?,?)", [_id, self.fn, outfn])
-        self.db.commit()
-        c.close()
