@@ -33,13 +33,14 @@ _fig = pl.figure(figsize=(12, 8))
 def plot_state(fn, outdir):
     hdus = pyfits.open(fn)
     data = np.array(hdus[0].data, dtype=float)
-    scene = np.array(hdus[1].data, dtype=float)
-    psf = np.array(hdus[2].data, dtype=float)
+    old_scene = np.array(hdus[1].data, dtype=float)
+    scene = np.array(hdus[2].data, dtype=float)
+    psf = np.array(hdus[3].data, dtype=float)
     hdus.close()
 
     imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
             + ".png")
-    lucky.plot_inference_step(_fig, data, scene, psf, scene, imgfn)
+    lucky.plot_inference_step(_fig, data, old_scene, psf, scene, imgfn)
 
 
 class PlottingHandler(FileSystemEventHandler):
