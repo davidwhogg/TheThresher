@@ -23,7 +23,7 @@ notes:
 
 """
 
-__all__ = ["Scene"]
+__all__ = ["Scene", "load_image", "centroid_image"]
 
 import os
 import logging
@@ -92,7 +92,7 @@ class Scene(object):
     imaging data stream.
 
     """
-    def __init__(self, basepath, outdir, psf_hw=13, size=100, sky=1.):
+    def __init__(self, basepath, outdir="", psf_hw=13, size=100, sky=1.):
         self.basepath = os.path.abspath(basepath)
         self.outdir = os.path.abspath(outdir)
         self.psf_hw = psf_hw
