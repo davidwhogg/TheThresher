@@ -90,10 +90,12 @@ class Scene(object):
         self.pass_number = 0
 
         # Set the scene size.
+        image = self.first_image
         if size is None:
-            image = self.first_image
             self.size = min(image.shape)
         else:
+            assert size <= min(image.shape), \
+                    "The scene size must be <= to the data size."
             self.size = size
 
         # L2 norm weights.
@@ -155,7 +157,7 @@ class Scene(object):
         image = self.first_image
         data = trim_image(image, self.size) + self.sky
         self.scene = convolve(data, self.default_psf, mode="full")
-        self.img_number = 1
+        # self.img_number = 1
 
     def run_inference(self, npasses=5, current_pass=0, current_img=None,
             do_centroiding=True):

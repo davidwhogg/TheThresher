@@ -7,7 +7,7 @@ A set of unit tests for the lucky imaging pipeline.
 import os
 import numpy as np
 
-from lucky import xy2index, index2xy, save_scene, read_scene
+from lucky import xy2index, index2xy, Scene
 
 
 class Tests(object):
@@ -38,21 +38,11 @@ class Tests(object):
         x1, y1 = index2xy(self.shape, i1)
         assert np.all(x1 == xgrid) and np.all(y1 == ygrid)
 
-    def test_io(self):
-        fn = ".unit_test.fits"
-        save_scene(self.scene, fn)
-        loadedScene = read_scene(fn)
-        try:
-            os.remove(fn)
-        except:
-            pass
-        assert np.sum(np.abs(self.scene - loadedScene)) < 1e-10
-
-# FIXME: Broken unit tests.
-# newPsf, newScene = inference_step(data, scene, 0.001, 0.001,
-#         runUnitTest=True)
-# # assert(np.all(newPsf >= 0)) # WHY DOES THIS FAIL FOR l_bfgs_b?
-# assert(np.all(newPsf > -1.e-3))  # should be more stringent
-# assert(np.all(newPsf < 1.e-3))  # should be more stringent
-# assert(np.all(newScene == 0))
-# return None
+    def test_psf_norm(self):
+        """Test to make sure that the PSF is properly normalized."""
+        bp = os.path.join(os.path.abspath(__file__), "..", "..", "test_data")
+        scene = Scene(bp, psf_hw=10)
+        scene.initialize_with_data()
+        scene._infer_psf(scene.first_image)
+        print np.sum(scene.psf)
+        assert False
