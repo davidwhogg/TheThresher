@@ -1,26 +1,6 @@
 """
 This file is part of the Lucky Imaging project.
 
-Issues:
--------
-- Initialization involves np.median() and np.clip(), as does the first pass
-  (pindex == 1) of optimization.  Insane.
-- There are hard-coded numbers everywhere, especially the stupid "300" and
-  some L2 norms.
-- sky fitting and display of results when sky has been fit needs to be
-  audited -- should be able to add a sky offset and get IDENTICAL results out.
-- region of image set by borderx, bordery; hard-coded! MAGIC NUMBERS abound.
-- The infer functions ought to take weight vectors -- this would permit
-  dropping data for cross-validation tests and also inclusion of an error
-  model.
-- I think it memory leaks at least a bit (`Image`s don't get deleted?).
-    The leak is somewhere in all the convolving, etc. in the inference steps
-
-notes:
-------
-- The NNLS implementation may require citation.
-- Search code for "hack" and "magic" for issues.
-
 """
 
 __all__ = ["Scene", "load_image", "centroid_image"]
@@ -86,43 +66,70 @@ def centroid_image(image, scene, size):
     return image[xmin:xmin + size, ymin:ymin + size]
 
 
+def trim_image(image, size):
+    xmin = int(0.5 * (image.shape[0] - size))
+    ymin = int(0.5 * (image.shape[0] - size))
+    return image[xmin:xmin + size, ymin:ymin + size]
+
+
 class Scene(object):
     """
     A `Scene` object describes and learns the "true" image from a lucky
     imaging data stream.
 
     """
-    def __init__(self, basepath, outdir="", psf_hw=13, size=100, sky=1.):
+    def __init__(self, basepath, outdir="", psf_hw=13, size=None, sky=0.,
+            initial_scene=None, kernel=None, psfL2=0.25, sceneL2=1. / 64.):
+        # All the metadata.
         self.basepath = os.path.abspath(basepath)
         self.outdir = os.path.abspath(outdir)
         self.psf_hw = psf_hw
-        self.size = size
         self.sky = sky
+
+        self.img_number = 0
+        self.pass_number = 0
+
+        # Set the scene size.
+        if size is None:
+            image = self.first_image
+            self.size = min(image.shape)
+        else:
+            self.size = size
+
+        # L2 norm weights.
+        self.psfL2 = psfL2
+        self.sceneL2 = sceneL2
 
         # Initialize the PSF image as a delta function.
         pd = 2 * psf_hw + 1
         self.psf = np.zeros((pd, pd))
         self.psf[psf_hw, psf_hw] = 1.
 
+        # Set the default PSF to be a delta function (i.e. a no-op).
         self.default_psf = np.zeros_like(self.psf)
         self.default_psf[psf_hw - 2:psf_hw + 2, psf_hw - 1:psf_hw + 2] = 1.
 
-        # Initialize the scene as a centered Gaussian.
-        x = np.linspace(-0.5 * size, 0.5 * size, size) ** 2
-        r = np.sqrt(x[:, None] + x[None, :])
-        self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
-        self.scene = convolve(self.scene, self.default_psf, mode="full")
+        # If it's not provided, initialize the scene to something reasonable.
+        if initial_scene is None:
+            # Initialize the scene as a centered Gaussian.
+            x = np.linspace(-0.5 * self.size, 0.5 * self.size, self.size) ** 2
+            r = np.sqrt(x[:, None] + x[None, :])
+            self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
+            self.scene = convolve(self.scene, self.default_psf, mode="full")
+        else:
+            self.scene = np.array(initial_scene)
 
-        # L2 norm weights.
-        self.psfL2 = 0.  # 0.25
-        self.sceneL2 = 0.0001 * 1. / 64.
+        if kernel is None:
+            # Make the PSF convolution kernel here. There's a bit of black
+            # MAGIC that could probably be fixed. The kernel is implicitly a
+            # `sigma = 1. pix` Gaussian.
+            self.kernel = np.exp(-0.5 * (np.arange(-3, 4)[:, None] ** 2
+                + np.arange(-3, 4)[None, :] ** 2))
+            self.kernel /= np.sum(self.kernel)
+        else:
+            self.kernel = kernel
 
-        # Make the PSF convolution kernel here. There's a bit of black
-        # MAGIC that could probably be fixed. The kernel is implicitly a
-        # `sigma = 1. pix` Gaussian.
-        self.kernel = np.exp(-0.5 * (np.arange(-3, 4)[:, None] ** 2
-            + np.arange(-3, 4)[None, :] ** 2))
-        self.kernel /= np.sum(self.kernel)
+        # The tiny kernel is also a delta function that is used for padding.
         Kx, Ky = self.kernel.shape
         self.tinykernel = np.zeros_like(self.kernel)
         self.tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
@@ -134,8 +141,24 @@ class Scene(object):
             if os.path.splitext(e)[1] == ".fits":
                 yield os.path.join(self.basepath, e)
 
-    def run_inference(self, npasses=5, current_pass=0, current_img=0,
-            init_with_data=True):
+    @property
+    def first_image(self):
+        """Get the data for the first image"""
+        return load_image(self.image_list.next())
+
+    def initialize_with_data(self):
+        """
+        Get a scene that can be used for initialization based on the _first_
+        piece of data.
+
+        """
+        image = self.first_image
+        data = trim_image(image, self.size) + self.sky
+        self.scene = convolve(data, self.default_psf, mode="full")
+        self.img_number = 1
+
+    def run_inference(self, npasses=5, current_pass=0, current_img=None,
+            do_centroiding=True):
         """
         Run the full inference on the dataset.
 
@@ -148,30 +171,32 @@ class Scene(object):
           pass through the data. This is used for restarting.
 
         """
+        if current_img is None:
+            current_img = self.img_number
+
         for self.pass_number in xrange(current_pass, npasses):
             for self.img_number, self.fn in enumerate(self.image_list):
                 if self.img_number >= current_img:
                     image = load_image(self.fn)
-                    data = centroid_image(image, self.scene, self.size)
+                    if do_centroiding:
+                        data = centroid_image(image, self.scene, self.size)
+                    else:
+                        data = trim_image(image, self.size)
+
                     data += self.sky
 
-                    if init_with_data and self.img_number == 0 and \
-                            self.pass_number == 0:
-                        self.scene = \
-                                convolve(data, self.default_psf, mode="full")
+                    # If it's the first pass, `alpha` should decay and we
+                    # should use _non-negative_ optimization.
+                    if self.pass_number == 0:
+                        alpha = min(2. / (1 + self.img_number), 0.25)
+                        nn = True
                     else:
-                        # If it's the first pass, `alpha` should decay and we
-                        # should use _non-negative_ optimization.
-                        if self.pass_number == 0:
-                            alpha = min(2. / (1 + self.img_number), 0.25)
-                            nn = True
-                        else:
-                            self.scene -= np.median(self.scene)  # Hackeroni?
-                            alpha = 2. / 300.  # Hack-o-rama?
-                            nn = False
+                        self.scene -= np.median(self.scene)  # Hackeroni?
+                        alpha = 2. / 300.  # Hack-o-rama?
+                        nn = False
 
-                        self._inference_step(data, alpha, nn)
-                        self._save_state(data)
+                    self._inference_step(data, alpha, nn)
+                    self._save_state(data)
 
             # After one full pass through the data, make sure that the index
             # of the zeroth image is reset. We only want to start from this

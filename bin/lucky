@@ -29,7 +29,11 @@ if __name__ == '__main__':
             help="The root directory for the imaging data")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The directory for the output files.")
-    parser.add_argument("--size", type=int, default=100,
+    parser.add_argument("-i", "--init_data", action="store_true",
+            help="Initialize the scene using the first data point?")
+    parser.add_argument("--centroid", action="store_true",
+            help="Should we centroid each new data point?")
+    parser.add_argument("--size", type=int, default=None,
             help="The size of the inferred scene.")
     parser.add_argument("--psf_hw", type=int, default=13,
             help="The half width of the inferred PSF image.")
@@ -67,4 +71,9 @@ if __name__ == '__main__':
     # Start the inference.
     scene = lucky.Scene(args.basepath, outdir, psf_hw=args.psf_hw,
             size=args.size, sky=args.sky)
-    scene.run_inference(npasses=args.npasses)
+
+    # Initialize with the data.
+    if args.init_data:
+        scene.initialize_with_data()
+
+    scene.run_inference(npasses=args.npasses, do_centroiding=args.centroid)
