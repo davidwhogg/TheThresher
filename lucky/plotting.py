@@ -1,79 +1,112 @@
-__all__ = ["plot_inference_step", "hogg_savefig"]
+__all__ = ["plot_inference_step"]
 
-import logging
+import itertools
 
 import numpy as np
 from scipy.signal import convolve
-import matplotlib.pyplot as plt
 
 
-def hogg_plot_image_histeq(ax, im):
-    shape = im.shape
-    size = im.size
-    foo = np.zeros(size)
-    foo[np.argsort(im.reshape(size))] = np.arange(size)
-    return ax.imshow(foo.reshape(shape), cmap="gray",
-            interpolation="nearest")
-
-
-def hogg_plot_image(ax, im, stretch):
-    if stretch is None:
-        a = np.median(im)
-        b = np.max(im)
-        vmin = a - b
-        vmax = a + b
-    else:
-        a = np.median(im)
-        b = np.sort(im.reshape(im.size))[0.95 * im.size]
-        vmin = a - 3. * b / stretch
-        vmax = a + 3. * b / stretch
-    return ax.imshow(im, cmap="gray", interpolation="nearest", vmin=vmin,
-            vmax=vmax)
-
-
-def plot_inference_step(fig, data, thisScene, thisPsf, newScene, filename,
-        stretch=None):
+def plot_image(ax, img, size=None, vrange=None):
     """
-    Make plots for `inference_step()`.
+    A wrapper to nicely plot an image the way that Hogg likes it.
+
+    ## Arguments
+
+    * `ax` (matplotlib.Axes): The axes to plot into.
+    * `img` (numpy.ndarray): The image.
+
+    ## Keyword Arguments
+
+    * `size` (int): The size to crop/pad the image to.
+    * `vrange` (tuple): The image stretch range.
+
+    """
+    if vrange is None:
+        a, b = np.median(img), np.max(img)
+        vmin, vmax = a - b, a + b
+    else:
+        vmin, vmax = vrange
+
+    ax.imshow(img, cmap="gray", interpolation="nearest", vmin=vmin, vmax=vmax)
+
+    # Crop/pad to the right size.
+    xmin, xmax = (img.shape[0] - size) / 2, (img.shape[0] + size) / 2 - 1
+    ymin, ymax = (img.shape[1] - size) / 2, (img.shape[1] + size) / 2 - 1
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+
+
+def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel):
+    """
+    Plot the images produced by a single update step.
+
+    NOTE: The stretch is the _same_ in most of the plots.
+
+    ## Arguments
+
+    * `fig` (matplotlib.Figure): The figure to clear and plot into.
+    * `data` (numpy.ndarray): The data image.
+    * `this_scene` (numpy.ndarray): The scene implied by _this datapoint
+      only_.
+    * `new_scene` (numpy.ndarray): The updated scene.
+    * `dpsf` (numpy.ndarray): The deconvolved PSF image.
+    * `kernel` (numpy.ndarray): The user-defined kernel.
 
     """
     fig.clf()
-    ax1 = fig.add_subplot(231)
 
-    ax2 = fig.add_subplot(232)
-    ax3 = fig.add_subplot(233)
-    ax4 = fig.add_subplot(234)
-    ax5 = fig.add_subplot(235)
-    ax6 = fig.add_subplot(236)
+    # Build the subplots.
+    rows, cols = 3, 3
+    axes = []
 
-    hw1 = (thisPsf.shape[0] - 1) / 2
-    hw2 = (data.shape[0] - thisPsf.shape[0] - 1) / 2
-    hogg_plot_image(ax1, data, stretch)
-    ax1.set_title("data")
+    for ri, ci in itertools.product(range(rows), range(cols)):
+        axes.append(fig.add_subplot(rows, cols, ri * cols + ci + 1))
+        axes[-1].set_xticklabels([])
+        axes[-1].set_yticklabels([])
 
-    # NOTE: Hogg, you had `scene` instead of `thisScene` in the line below
-    # which was resolving to the _global_ scene object. I think that
-    # `thisScene` is what we actually want though...
-    hogg_plot_image(ax2, convolve(thisScene, thisPsf, mode="valid"), stretch)
-    ax2.set_title(r"[inferred PSF] $\ast$ [previous scene]")
-    hogg_plot_image(ax3, convolve(newScene, thisPsf, mode="valid"), stretch)
-    ax3.set_title(r"[inferred PSF] $\ast$ [inferred scene]")
-    bigPsf = np.zeros_like(data)
-    bigPsf[hw2:hw2 + thisPsf.shape[0], hw2:hw2 + thisPsf.shape[1]] = thisPsf
-    hogg_plot_image(ax4, bigPsf, stretch)
-    ax4.set_title("inferred PSF (deconvolved)")
-    hogg_plot_image(ax5, thisScene[hw1:-hw1, hw1:-hw1], stretch)
-    ax5.set_title("inferred scene (cropped)")
-    hogg_plot_image(ax6, newScene[hw1:-hw1, hw1:-hw1], stretch)
-    ax6.set_title("updated scene (cropped)")
-    hogg_savefig(filename)
-    return None
+    # Calculate the stretch.
+    a, b = np.median(data), np.max(data)
+    vrange = (a - b, a + b)
 
+    # Set up which data will go in which panel.
+    predicted = convolve(this_scene, dpsf, mode="valid")
+    delta = data - predicted
+    psf = convolve(dpsf, kernel, mode="valid")
+    panels = [[("PSF", psf),
+               ("Data", data, vrange),
+               ("This Scene", this_scene, vrange)],
+              [("dPSF", dpsf),
+               ("dPSF * This Scene", predicted, vrange),
+               ("New Scene", new_scene, vrange)],
+              [("", None),
+               ("Data - dPSF * This Scene", delta, vrange),
+               ("Update", new_scene - this_scene, vrange)]]
 
-def hogg_savefig(fn):
-    """
-    Hogg likes a verbose `savefig()`!
+    # Do the plotting.
+    size = data.shape[0]  # The size to pad/crop to.
+    for i, (ri, ci) in enumerate(itertools.product(range(rows), range(cols))):
+        ax = axes[i]
+        panel = panels[ri][ci]
+        title, content = panel[0], panel[1]
+        if len(panel) > 2:
+            vrange = panel[2]
+        else:
+            vrange = None
 
-    """
-    logging.info("hogg_savefig(): writing {0}".format(fn))
-    return plt.savefig(fn)
+        if content is not None:
+            plot_image(ax, content, size=size, vrange=vrange)
+            ax.set_title(title)
+        else:
+            # Put some stats in this axis.
+            line_height = 0.13
+            txt = []
+            txt.append(r"$\sum \mathrm{{dPSF}} = {0:.4f}$"
+                    .format(np.sum(dpsf)))
+            txt.append(r"$\sum \mathrm{{PSF}} = {0:.4f}$"
+                    .format(np.sum(psf)))
+
+            for i in range(len(txt)):
+                ax.text(0, 1 - i * line_height, txt[i], ha="left", va="top",
+                        transform=ax.transAxes)
+
+            ax.set_axis_off()

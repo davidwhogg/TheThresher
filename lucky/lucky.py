@@ -23,7 +23,7 @@ notes:
 
 """
 
-__all__ = ["Scene"]
+__all__ = ["Scene", "load_image", "centroid_image"]
 
 import os
 import logging
@@ -92,7 +92,7 @@ class Scene(object):
     imaging data stream.
 
     """
-    def __init__(self, basepath, outdir, psf_hw=13, size=100, sky=1.):
+    def __init__(self, basepath, outdir="", psf_hw=13, size=100, sky=1.):
         self.basepath = os.path.abspath(basepath)
         self.outdir = os.path.abspath(outdir)
         self.psf_hw = psf_hw
@@ -114,8 +114,8 @@ class Scene(object):
         self.scene = convolve(self.scene, self.default_psf, mode="full")
 
         # L2 norm weights.
-        self.psfL2 = 0.25
-        self.sceneL2 = 1. / 64.
+        self.psfL2 = 0.  # 0.25
+        self.sceneL2 = 0.0001 * 1. / 64.
 
         # Make the PSF convolution kernel here. There's a bit of black
         # MAGIC that could probably be fixed. The kernel is implicitly a
@@ -134,7 +134,8 @@ class Scene(object):
             if os.path.splitext(e)[1] == ".fits":
                 yield os.path.join(self.basepath, e)
 
-    def run_inference(self, npasses=5, current_pass=0, current_img=0):
+    def run_inference(self, npasses=5, current_pass=0, current_img=0,
+            init_with_data=True):
         """
         Run the full inference on the dataset.
 
@@ -154,18 +155,23 @@ class Scene(object):
                     data = centroid_image(image, self.scene, self.size)
                     data += self.sky
 
-                    # If it's the first pass, `alpha` should decay and we
-                    # should use _non-negative_ optimization.
-                    if self.pass_number == 0:
-                        alpha = min(2. / (1 + self.img_number), 0.25)
-                        nn = True
+                    if init_with_data and self.img_number == 0 and \
+                            self.pass_number == 0:
+                        self.scene = \
+                                convolve(data, self.default_psf, mode="full")
                     else:
-                        self.scene -= np.median(self.scene)  # Hackeroni?
-                        alpha = 2. / 300.  # Hack-o-rama?
-                        nn = False
+                        # If it's the first pass, `alpha` should decay and we
+                        # should use _non-negative_ optimization.
+                        if self.pass_number == 0:
+                            alpha = min(2. / (1 + self.img_number), 0.25)
+                            nn = True
+                        else:
+                            self.scene -= np.median(self.scene)  # Hackeroni?
+                            alpha = 2. / 300.  # Hack-o-rama?
+                            nn = False
 
-                    self._inference_step(data, alpha, nn)
-                    self._save_state(data)
+                        self._inference_step(data, alpha, nn)
+                        self._save_state(data)
 
             # After one full pass through the data, make sure that the index
             # of the zeroth image is reset. We only want to start from this
@@ -188,8 +194,9 @@ class Scene(object):
         assert 0 < alpha <= 1
         self._infer_psf(data)
         self.old_scene = np.array(self.scene)
+        self.this_scene = self._infer_scene(data)
         self.scene = (1 - alpha) * self.scene \
-                                + alpha * self._infer_scene(data)
+                                + alpha * self.this_scene
         self.scene -= np.median(self.scene)  # Crazy hackishness!
 
         # Hogg: is this right?
@@ -323,8 +330,11 @@ class Scene(object):
         _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
         outfn = os.path.join(self.outdir, _id + ".fits")
 
-        hdus = [pyfits.PrimaryHDU(data), pyfits.ImageHDU(self.old_scene),
-                pyfits.ImageHDU(self.scene), pyfits.ImageHDU(self.psf)]
+        hdus = [pyfits.PrimaryHDU(data),
+                pyfits.ImageHDU(self.this_scene),
+                pyfits.ImageHDU(self.scene),
+                pyfits.ImageHDU(self.psf),
+                pyfits.ImageHDU(self.kernel)]
 
         hdus[0].header.update("datafn", self.fn)
         hdus[0].header.update("size", self.size)

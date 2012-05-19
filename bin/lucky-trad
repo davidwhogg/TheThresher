@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+"""
+This is the main user entry point for our lucky imaging pipeline.
+
+I hope that the name of this file changes soon!
+
+"""
+
+import os
+import sys
+import logging
+
+# This heinous hack let's me run this script without actually installing the
+# `lucky` package. I learned this from Steve Losh at:
+#     https://github.com/sjl/d/blob/master/bin/d
+try:
+    import lucky
+except ImportError:
+    sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+    import lucky
+
+if __name__ == '__main__':
+    import argparse
+
+    # Start by parsing the command line arguments.
+    desc = "Run traditional lucky imaging."
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument("basepath", type=str,
+            help="The root directory for the imaging data")
+    parser.add_argument("-o", "--output", type=str, default=None,
+            help="The output file.")
+    parser.add_argument("--log", type=str, default=None,
+            help="The filename for the log.")
+    parser.add_argument("-v", "--verbose", action="store_true",
+            help="Enable verbose logging.")
+    args = parser.parse_args()
+
+    if args.output is None:
+        outfn = os.path.join(args.basepath, "lucky-trad.dat")
+    else:
+        outfn = args.output
+
+    # Set up the `logging` module with the settings provided at the command
+    # line.
+    loglevel = logging.INFO
+    if args.verbose:
+        loglevel = logging.DEBUG
+    if args.log is None:
+        logging.basicConfig(level=loglevel)
+    else:
+        logfn = args.log
+        logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
+
+    # Run the pipeline.
+    scene = lucky.Scene(args.basepath)
+
+    results = {}
+    for fn in scene.image_list:
+        image = lucky.load_image(fn)
+        data = float(lucky.centroid_image(image, scene.scene, 1))
+
+        k = os.path.split(fn)[-1]
+        results[k] = data
+
+    f = open(outfn, "w")
+    for k in sorted(results, key=lambda k: results[k])[::-1]:
+        f.write("{0:10.4f} {1:s}\n".format(results[k], k))
+
+    f.close()
