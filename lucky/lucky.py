@@ -33,6 +33,39 @@ def index2xy(shape, i):
     return ((i / shape[1]), (i % shape[1]))
 
 
+def unravel_scene(scene, P):
+    """
+    Unravel the scene object to prepare for the least squares problem.
+
+    ## Arguments
+
+    * `scene` (numpy.ndarray): The 2-D scene object.
+    * `P` (int): The half-width of the PSF object.
+
+    """
+    # Work out all the dimensions first.
+    S = len(scene)
+    D = S - 2 * P
+
+    psf_shape = 2 * P + 1
+    psf_size = psf_shape ** 2
+
+    data_shape = (D, D)
+    data_size = D ** 2
+
+    # Build the output array.
+    result = np.empty((psf_size, data_size), dtype=scene.dtype)
+
+    # Loop over the valid data region.
+    for k in xrange(data_size):
+        dx, dy = index2xy(data_shape, k)
+        grid = np.meshgrid(dy + np.arange(psf_shape),
+                           dx + np.arange(psf_shape))[::-1]
+        result[k, :] = scene[grid].flatten()
+
+    return result
+
+
 def load_image(fn):
     """
     Get the image data from a FITS file.
