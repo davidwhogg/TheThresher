@@ -54,7 +54,7 @@ def unravel_scene(scene, P):
     data_size = D ** 2
 
     # Build the output array.
-    result = np.empty((psf_size, data_size), dtype=scene.dtype)
+    result = np.empty((data_size, psf_size), dtype=scene.dtype)
 
     # Loop over the valid data region.
     for k in xrange(data_size):
@@ -142,7 +142,7 @@ class Scene(object):
 
         # Set the default PSF to be a delta function (i.e. a no-op).
         self.default_psf = np.zeros_like(self.psf)
-        self.default_psf[psf_hw - 2:psf_hw + 2, psf_hw - 1:psf_hw + 2] = 1.
+        self.default_psf[psf_hw, psf_hw] = 1.
 
         # If it's not provided, initialize the scene to something reasonable.
         if initial_scene is None:
@@ -169,6 +169,10 @@ class Scene(object):
         self.tinykernel = np.zeros_like(self.kernel)
         self.tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
 
+        # Calculate the mask that we will use to unravel the scene.
+        s = np.arange(np.product(self.scene.shape)).reshape(self.scene.shape)
+        self.scene_mask = unravel_scene(s, self.psf_hw)
+
     @property
     def image_list(self):
         entries = os.listdir(self.basepath)
@@ -190,7 +194,6 @@ class Scene(object):
         image = self.first_image
         data = trim_image(image, self.size) + self.sky
         self.scene = convolve(data, self.default_psf, mode="full")
-        # self.img_number = 1
 
     def run_inference(self, npasses=5, current_pass=0, current_img=None,
             do_centroiding=True):
@@ -259,7 +262,6 @@ class Scene(object):
                                 + alpha * self.this_scene
         self.scene -= np.median(self.scene)  # Crazy hackishness!
 
-        # Hogg: is this right?
         if nn:
             self.scene[self.scene < 0] = 0.0
 
@@ -268,70 +270,40 @@ class Scene(object):
         Take data and a current belief about the scene; infer the psf for
         this image given the scene.  This code infers a sky level
         simultaneously.  That might seem like a detail, but it matters.
-        There is also a Gaussian-like kernel hard-coded in here that is a
-        problem.
-
-        Note that the returned PSF (`psfShape` in the code) is *larger*
-        than the number of pixels implied by the number of free parameters
-        (`psfParameterShape`).  That is, the PSF it is padded out, because
-        of the aforementioned kernel.
-
-        Bug: There is a reversal (a `[::-1]`) in the code that is not
-        fully understood at present.
-
-        Bug: Shouldn't make the kernels at every call; these should be
-        static or passed in.
 
         """
-        Kx, Ky = self.kernel.shape
+        # Sort out the dimensions.
+        P = 2 * self.psf_hw + 1
+        psf_size = P ** 2
 
-        # deal with all the size and shape setup
-        Nx, Ny = self.scene.shape
-        Px, Py = data.shape
-        Mx, My = (Nx - Px + 1, Ny - Py + 1)
-        Qx, Qy = (Mx - Kx + 1, My - Ky + 1)
-        assert Qx > 0 and Qy > 0, \
-                "The scene must be larger than the data ({0}, {1})" \
-                .format(Qx, Qy)
-        psfParameterShape = (Qx, Qy)
-        psfParameterSize = Qx * Qy
+        D = data.shape[0]
+        data_size = D ** 2
 
-        # build scene matrix from kernel-convolved scene
-        kernelConvolvedScene = convolve(self.scene, self.kernel, mode="same")
-        sceneMatrix = np.zeros((data.size + psfParameterSize,
-                                psfParameterSize + 1))
-        for k in range(psfParameterSize):
-            dx, dy = index2xy(psfParameterShape, k)
-            dx -= Qx / 2
-            dy -= Qx / 2
-            sceneMatrix[:data.size, k] = kernelConvolvedScene[
-                    (Mx / 2 + dx):(Mx / 2 + dx + Px),
-                    (My / 2 + dy): (My / 2 + dy + Py)].reshape(data.size)
+        # Build scene matrix from kernel-convolved scene.
+        kc_scene = convolve(self.scene, self.kernel, mode="same")
+        scene_matrix = np.zeros((data_size + psf_size, psf_size + 1))
 
-        # sky fitting
-        sceneMatrix[:data.size, psfParameterSize] = 1.
+        # Unravel the scene.
+        scene_matrix[:data_size, :psf_size] = \
+                                    kc_scene.flatten()[self.scene_mask]
 
-        # L2 regularization
-        sceneMatrix[data.size:data.size + psfParameterSize, :psfParameterSize]\
-                = self.psfL2 * np.identity(psfParameterSize)
+        # Add the sky.
+        scene_matrix[:data.size, psf_size] = 1
 
-        # infer PSF and return
-        dataVector = np.append(data.reshape(data.size),
-                np.zeros(psfParameterSize))
-        newPsfParameter, rnorm = op.nnls(sceneMatrix, dataVector)
-        logging.info("Dropping sky level {0} in _infer_psf."
-                                    .format(newPsfParameter[psfParameterSize]))
-        newPsfParameter = newPsfParameter[:psfParameterSize]  # drop sky
-        newDeconvolvedPsf = convolve(
-                newPsfParameter[::-1].reshape(psfParameterShape),
-                self.tinykernel, mode="full")
+        # And the L2 regularization.
+        scene_matrix[data_size:, :psf_size] = self.psfL2 * np.eye(psf_size)
 
-        logging.info("Got PSF {0}. Min: {1}, Median: {2}, Max: {3}"
-                .format(newDeconvolvedPsf.shape, newDeconvolvedPsf.min(),
-                    np.median(newDeconvolvedPsf), newDeconvolvedPsf.max()))
+        # Build the data vector.
+        data_vector = np.append(data.flatten(), np.zeros(psf_size))
 
-        # Save the new PSF.
-        self.psf = newDeconvolvedPsf
+        # Infer the new PSF.
+        new_psf, rnorm = op.nnls(scene_matrix, data_vector)
+
+        # Do the index gymnastics to get the correct inferred PSF.
+        # NOTE: here, we're first dropping the sky and then reversing the
+        # PSF object because of the way that the `convolve` function is
+        # defined.
+        self.psf = new_psf[:-1][::-1].reshape((P, P))
 
     def _infer_scene(self, data):
         """
