@@ -254,19 +254,24 @@ class Scene(object):
                         alpha = min(2. / (1 + self.img_number), 0.25)
                         nn = True
                     else:
-                        self.scene -= np.median(self.scene)  # Hackeroni?
+                        # self.scene -= np.median(self.scene)  # Hackeroni?
                         alpha = 2. / 300.  # Hack-o-rama?
                         nn = False
-
-                    # Do the inference.
-                    self._inference_step(data, alpha, nn)
 
                     # On the first pass on the first image, normalize so that
                     # the PSF sums to ~1.
                     if self.img_number == 0 and self.pass_number == 0:
+                        self._infer_psf(data)
+
+                        # Properly normalize the PSF.
                         norm = np.sum(self.psf)
-                        self.scene *= norm
                         self.psf /= norm
+
+                        # Re-infer the scene.
+                        self.scene = self._infer_scene(data)
+
+                    # Do the inference.
+                    self._inference_step(data, alpha, nn)
 
                     # Save the output.
                     self._save_state(data)
@@ -295,7 +300,8 @@ class Scene(object):
         self.this_scene = self._infer_scene(data)
         self.scene = (1 - alpha) * self.scene \
                                 + alpha * self.this_scene
-        self.scene -= np.median(self.scene)  # Crazy hackishness!
+
+        # self.scene -= np.median(self.scene)  # Crazy hackishness!
 
         if nn:
             self.scene[self.scene < 0] = 0.0
@@ -315,7 +321,7 @@ class Scene(object):
         data_size = D ** 2
 
         # Build scene matrix from kernel-convolved scene.
-        kc_scene = convolve(self.scene, self.kernel, mode="same")
+        kc_scene = self.scene  # convolve(self.scene, self.kernel, mode="same")
         scene_matrix = np.zeros((data_size + psf_size, psf_size + 1))
 
         # Unravel the scene.
@@ -346,47 +352,42 @@ class Scene(object):
         this image given the PSF.
 
         """
-        Px, Py = data.shape
-        Mx, My = self.psf.shape
-        Nx, Ny = (Px + Mx - 1, Py + My - 1)
-        sceneShape = (Nx, Ny)
-        sceneSize = Nx * Ny
+        # The dimensions.
+        P = 2 * self.psf_hw + 1
+        psf_size = P ** 2
 
-        # build psf matrix from psf
-        # psfX, psfY = index2xy(self.psf.shape, np.arange(self.psf.size))
-        # psfVector = self.psf.reshape(self.psf.size)[::-1]  # HACK
-        # vals = np.zeros(data.size * self.psf.size)
-        # rows = np.zeros_like(vals).astype(int)
-        # cols = np.zeros_like(vals).astype(int)
-        # for k in range(data.size):
-        #     dx, dy = index2xy(data.shape, k)
-        #     s = slice(k * self.psf.size, (k + 1) * self.psf.size)
-        #     vals[s] = psfVector
-        #     rows[s] = k
-        #     cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
+        D = data.shape[0]
+        data_size = D ** 2
 
-        # # add entries for old-scene-based regularization
-        # vals = np.append(vals, np.zeros(sceneSize) + self.sceneL2)
-        # rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
-        # cols = np.append(cols, np.arange(sceneSize))
+        S = self.scene.shape[0]
+        scene_size = S ** 2
 
-        psfMatrix = csr_matrix((vals, (rows, cols)),
-                shape=(data.size + sceneSize, sceneSize))
+        kc_psf = self.psf  # convolve(self.psf, self.kernel, mode="same")
 
-        # infer scene and return
-        dataVector = np.append(data.reshape(data.size), np.zeros(sceneSize))
-        (newScene, istop, niters, r1norm, r2norm, anorm, acond,
-            arnorm, xnorm, var) = lsqr(psfMatrix, dataVector)
-        newScene = newScene.reshape(sceneShape)
-        newScene -= np.median(newScene)
+        # NOTE: the PSF is reversed here.
+        vals = np.zeros((data_size, psf_size)) + kc_psf.flatten()[None, ::-1]
+        vals = vals.flatten()
 
-        logging.info("Got scene {0}, Min: {1}, Median: {2}, Max: {3}"
-                .format(newScene.shape, newScene.min(), np.median(newScene),
-                    newScene.max()))
+        # Append the identity for the L2 norm.
+        vals = np.append(vals, np.ones(scene_size))
 
-        gc.collect()
+        psf_matrix = csr_matrix((vals, (self.psf_rows, self.psf_cols)),
+                shape=(data_size + scene_size, scene_size))
 
-        return newScene
+        # Infer scene and return
+        data_vector = np.append(data.flatten(), np.zeros(scene_size))
+        results = lsqr(psf_matrix, data_vector)
+
+        new_scene = results[0].reshape((S, S))
+        # new_scene -= np.median(new_scene)
+
+        # logging.info("Got scene {0}, Min: {1}, Median: {2}, Max: {3}"
+        #         .format(newScene.shape, newScene.min(), np.median(newScene),
+        #             newScene.max()))
+
+        # gc.collect()
+
+        return new_scene
 
     def _save_state(self, data):
         _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
@@ -400,8 +401,8 @@ class Scene(object):
 
         hdus[0].header.update("datafn", self.fn)
         hdus[0].header.update("size", self.size)
-        hdus[0].header.update("pass_number", self.pass_number)
-        hdus[0].header.update("img_number", self.img_number)
+        hdus[0].header.update("pass", self.pass_number)
+        hdus[0].header.update("image", self.img_number)
         hdus[1].header.update("status", "old")
         hdus[2].header.update("status", "new")
 

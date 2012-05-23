@@ -23,11 +23,15 @@ def plot_image(ax, img, size=None, vrange=None):
     """
     if vrange is None:
         a, b = np.median(img), np.max(img)
-        vmin, vmax = a - b, a + b
+        vmin, vmax = a - 0.2 * b, a + b
     else:
         vmin, vmax = vrange
 
-    ax.imshow(img, cmap="gray", interpolation="nearest", vmin=vmin, vmax=vmax)
+    # Invert the image.
+    vmin, vmax = -vmax, -vmin
+
+    ax.imshow(-img, cmap="gray", interpolation="nearest",
+            vmin=vmin, vmax=vmax)
 
     # Crop/pad to the right size.
     xmin, xmax = (img.shape[0] - size) / 2, (img.shape[0] + size) / 2 - 1
@@ -36,7 +40,8 @@ def plot_image(ax, img, size=None, vrange=None):
     ax.set_ylim(ymin, ymax)
 
 
-def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel):
+def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
+        meta=[]):
     """
     Plot the images produced by a single update step.
 
@@ -56,7 +61,7 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel):
     fig.clf()
 
     # Build the subplots.
-    rows, cols = 3, 3
+    rows, cols = 3, 4
     axes = []
 
     for ri, ci in itertools.product(range(rows), range(cols)):
@@ -66,21 +71,29 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel):
 
     # Calculate the stretch.
     a, b = np.median(data), np.max(data)
-    vrange = (a - b, a + b)
+    vrange = (a - 0.2 * b, a + b)
+
+    # Hard stretch the inferred scene.
+    a, b = np.median(new_scene), 0.2 * np.max(new_scene)
+    vrange_hard = (a - 0.2 * b, a + b)
 
     # Set up which data will go in which panel.
     predicted = convolve(this_scene, dpsf, mode="valid")
     delta = data - predicted
     psf = convolve(dpsf, kernel, mode="valid")
+    norm = np.sum(dpsf)
     panels = [[("PSF", psf),
                ("Data", data, vrange),
-               ("This Scene", this_scene, vrange)],
+               ("This Scene", norm * this_scene, vrange),
+               ("This Scene", this_scene, vrange_hard)],
               [("dPSF", dpsf),
-               ("dPSF * This Scene", predicted, vrange),
-               ("New Scene", new_scene, vrange)],
+               (r"dPSF $\ast$ This Scene", predicted, vrange),
+               ("New Scene", new_scene),
+               ("New Scene", new_scene, vrange_hard)],
               [("", None),
-               ("Data - dPSF * This Scene", delta, vrange),
-               ("Update", new_scene - this_scene, vrange)]]
+               (r"Data - dPSF $\ast$ This Scene", delta, vrange),
+               ("Update", new_scene - this_scene, vrange),
+               ("annotations", None)]]
 
     # Do the plotting.
     size = data.shape[0]  # The size to pad/crop to.
@@ -96,12 +109,12 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel):
         if content is not None:
             plot_image(ax, content, size=size, vrange=vrange)
             ax.set_title(title)
-        else:
+        elif title == "annotations":
             # Put some stats in this axis.
             line_height = 0.13
-            txt = []
+            txt = meta
             txt.append(r"$\sum \mathrm{{dPSF}} = {0:.4f}$"
-                    .format(np.sum(dpsf)))
+                    .format(norm))
             txt.append(r"$\sum \mathrm{{PSF}} = {0:.4f}$"
                     .format(np.sum(psf)))
 
@@ -109,4 +122,6 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel):
                 ax.text(0, 1 - i * line_height, txt[i], ha="left", va="top",
                         transform=ax.transAxes)
 
+            ax.set_axis_off()
+        else:
             ax.set_axis_off()
