@@ -1,3 +1,12 @@
+% this file is part of the Lucky Imaging project
+
+% to-do
+% -----
+% - Adam Bolton commented on my blog about http://arxiv.org/abs/0911.2689 and http://arxiv.org/abs/1111.6525 
+% - write first draft
+% - make and insert figures
+% - send to Lauer, Marshall, Kendrew, Brandner, Crotts for comments
+
 \documentclass[12pt,preprint]{aastex}
 
 \newcounter{address}
@@ -47,15 +56,60 @@ data taken with the \LCOGT\ lucky imaging system.
 
 \begin{document}
 
-\textbf{[This document is a very early draft dated 2012-04-23.  Please do not cite it without the permission of the authors.]}
+\textbf{[This document is a very early draft dated 2012-05-03.  Please do not cite it without the permission of the authors.]}
 
 \section{Introduction}
 
-...What is lucky imaging traditionally and what are the benefits and costs?..
+High-resolution imaging has seen great success in the last decades,
+with the \project{Hubble Space Telescope}, natural and artificial
+guide-star adaptive optics, and lucky imaging.  Lucky imaging is
+possible with very inexpensive equipment, but as a technique it is not
+inexpensive because it involves so much waste.
+
+The idea behind traditional lucky imaging is that typical, smooth
+atmospheric seeing is a time average of a rapidly varying, multi-modal
+point-spread function.  If you take images rapidly with a very fast
+camera, occasionally the atmosphere will---just through
+chance---produce a nearly diffraction-limited image.  That is,
+occasionally the wavefront distortions from the atmosphere will come
+close to canceling (or really cancelling the imperfections in your
+real telescope).  In a lucky imaging run, you take an enormous number
+of short frames and \emph{throw almost all of them away}.  The
+resulting average, stack, or co-add of the best images can have very
+high angular resolution.  It can't have very high signal-to-noise,
+simply because so little data in the end get used (typically much less
+than one percent), but it can be very good for making measurements
+that require high spatial resolution.
+
+Lucky imaging is straightforward---and very simple to implement---but
+it violates one very important principle of empirical science: There
+is no way that \emph{throwing away} non-corrupted data can give you
+\emph{more information}.  It might be that doing something heuristic
+with bad data will make your results worse, but if you are doing
+something probabilistically justifiable, no datum can be
+\emph{negatively informative}.  The worst a datum can be is useless.
+There can't ever be an inferential justification---other than
+pragmatic---for discarding any relevant data.
+
+In the case of lucky imaging, the fundamental reason that throwing
+away data helps is that the core data analysis step is co-addition of
+the imaging, which (though widely used in astronomy) is not
+justifiable when the point-spread function is varying rapidly.  Lucky
+imaging is also very sensible operationally: It provides results
+rapidly (even on-the-fly during the observing run), and permits
+analysis of enormous data sets without enormous computation (for
+example, it can be implemented in map-reduce).  What we are about to
+propose will not be as fast or as computationally efficient.  It will,
+however, be justifiable within probabilistic data analysis and will
+make use of every datum.
 
 ...What is speckle imaging and it's poor cousin shift-and-add?..
 
-...Why is it that a Real Scientist (TM) commits to Never Throw Away Data (TM)?..
+...Do a demo of traditional lucky imaging (TLI) where we move the
+threshold and see the results change...
+
+...How are these ideas related to deconvolution \citep{hirsch} and why
+do we want band-limited deconvolution \citep{magain}?..
 
 \section{Imaging generalities}
 
@@ -200,15 +254,47 @@ dangerous?..
 
 \section{The method and pipeline}
 
+The method is, for each of $N$ data images $D_n$ taken in turn:
+
+1. Use the current scene image $S$ to infer the PSF $\psi_n$ for data
+image $D_n$ by non-negative least squares.  The PSF model at this
+stage is a fixed-grid mixture of $\sigma=1$~pix ($FWHM = 2.35$~pix)
+two-dimensional, circular Gaussians.  In detail, when we infer the
+PSF, we also infer a sky level, and apply a L2 regularization to keep
+the PSF smooth when there are degeneracies.
+
+2. ``Deconvolve'' the PSF by replacing the mixture of Gaussians with a
+mixture of delta-functions, with the same amplitudes.  This follows
+the general idea of band-limited deconvolution \citep{magain}.
+
+3. Infer the scene $S_n$ implied by this data image $D_n$ given the
+deconvolved PSF.  This fit is done without constraints except a small
+regularization to deal with the fact that the scene is bigger than the
+data image.
+
+4. Update the scene by combining the current scene $S$ with the newly
+inferred scene $S_n$ according to
+\begin{eqnarray}\displaystyle
+S &\leftarrow& [1-\alpha_n]\,S + \alpha_n\,S_n
+\quad ,
+\end{eqnarray}
+where $\alpha_n$ is either $2/n$ or else $2/N$.  Possibly also apply
+non-negative clipping, sky adjustment, or other constraints or
+regularizations.
+
 \section{Experiments and results}
 
 \section{Discussion}
 
-\acknowledgements It is a pleasure to thank Stefan Harmeling
-(T\"ubingen), Michael Hirsch (UCL), and Bernhard Sch\"olkopf
-(T\"ubingen) for introducing us to the ideas in \citet{hirsch}; many
-of the technical ideas in this \documentname\ come from their work.
-We also single out Dustin Lang (CMU) and Robert Lupton (Princeton) for
+\acknowledgements It is a pleasure to thank
+  Adam Bolton (Utah),
+  Brendon Brewer (UCSB),
+  Stefan Harmeling (T\"ubingen),
+  Michael Hirsch (UCL),
+  Phil Marshall (Oxford), and
+  Bernhard Sch\"olkopf (T\"ubingen)
+for contributions and comments.  We
+also single out Dustin Lang (CMU) and Robert Lupton (Princeton) for
 special thanks; DWH wouldn't understand anything about imaging if it
 weren't for the many years of discussions.  DWH and DFM were partially
 supported by NASA (grant GRANT NUMBER HERE) and the NSF (grant
@@ -221,6 +307,8 @@ at [URL HERE].
 \begin{thebibliography}{70}
 \bibitem[Hirsch \etal(2011)]{hirsch}
 Hirsch,~M., Harmeling,~S., Sra,~S., Sch\"olkopf,~B., 2011, \aap, 531, A9
+\bibitem[Magain \etal(1998)]{magain}
+Magain,~P., Courbin,~F., Sohy,~S., 1998, \apj, 494, 472 
 \end{thebibliography}
 
 \end{document}

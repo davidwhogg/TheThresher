@@ -1,0 +1,103 @@
+#!/usr/bin/env python
+"""
+This script plots the results of a `lucky` run and it can monitor the output
+directory for real time plotting.
+
+"""
+
+import os
+import sys
+import logging
+import time
+import glob
+
+import numpy as np
+import matplotlib.pyplot as pl
+import pyfits
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+# This heinous hack let's me run this script without actually installing the
+# `lucky` package. I learned this from Steve Losh at:
+#     https://github.com/sjl/d/blob/master/bin/d
+try:
+    import lucky
+except ImportError:
+    sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+    import lucky
+
+
+_fig = pl.figure(figsize=(12, 12))
+
+
+def plot_state(fn, outdir):
+    hdus = pyfits.open(fn)
+    data = np.array(hdus[0].data, dtype=float)
+    this_scene = np.array(hdus[1].data, dtype=float)
+    new_scene = np.array(hdus[2].data, dtype=float)
+    psf = np.array(hdus[3].data, dtype=float)
+    kernel = np.array(hdus[4].data, dtype=float)
+    hdus.close()
+
+    lucky.plot_inference_step(_fig, data, this_scene, new_scene, psf, kernel)
+
+    imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
+            + ".png")
+    logging.info("Saving figure to: {0}".format(imgfn))
+    pl.savefig(imgfn)
+
+
+class PlottingHandler(FileSystemEventHandler):
+    def on_any_event(self, event):
+        ext = os.path.splitext(event.src_path)[1]
+        if ext.lower() == ".fits" and os.path.exists(event.src_path):
+            plot_state(event.src_path, self.outdir)
+
+
+if __name__ == '__main__':
+    import argparse
+
+    # Start by parsing the command line arguments.
+    desc = "Monitor a directory for new FITS files and plot the inference."
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument("basepath", type=str,
+            help="The directory to monitor.")
+    parser.add_argument("-o", "--output", type=str, default=None,
+            help="The directory for the output files.")
+    parser.add_argument("-m", "--monitor", action="store_true",
+            help="Monitor the directory and plot in real time")
+    args = parser.parse_args()
+
+    bp = os.path.abspath(args.basepath)
+
+    if args.output is None:
+        outdir = bp
+    else:
+        outdir = args.output
+
+    try:
+        os.makedirs(outdir)
+    except os.error:
+        pass
+
+    logging.basicConfig(level=logging.INFO)
+
+    if args.monitor:
+        # Start monitoring.
+        handler = PlottingHandler()
+        handler.outdir = outdir
+        observer = Observer()
+        observer.schedule(handler, path=bp, recursive=True)
+
+        observer.start()
+
+        print("Monitoring {0}. Press Ctrl-C to stop.".format(bp))
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            observer.stop()
+        observer.join()
+    else:
+        for f in glob.glob(os.path.join(bp, "*.fits")):
+            plot_state(f, outdir)
