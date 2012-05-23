@@ -33,7 +33,7 @@ def index2xy(shape, i):
     return ((i / shape[1]), (i % shape[1]))
 
 
-def unravel_scene(scene, P):
+def unravel_scene(S, P):
     """
     Unravel the scene object to prepare for the least squares problem.
 
@@ -44,7 +44,6 @@ def unravel_scene(scene, P):
 
     """
     # Work out all the dimensions first.
-    S = len(scene)
     D = S - 2 * P
 
     psf_shape = 2 * P + 1
@@ -53,8 +52,11 @@ def unravel_scene(scene, P):
     data_shape = (D, D)
     data_size = D ** 2
 
+    # The layout of the scene.
+    scene = np.arange(S ** 2).reshape((S, S))
+
     # Build the output array.
-    result = np.empty((data_size, psf_size), dtype=scene.dtype)
+    result = np.empty((data_size, psf_size), dtype=int)
 
     # Loop over the valid data region.
     for k in xrange(data_size):
@@ -64,6 +66,30 @@ def unravel_scene(scene, P):
         result[k, :] = scene[grid].flatten()
 
     return result
+
+
+def unravel_psf(S, P):
+    D = S - 2 * P
+    data_size = D ** 2
+    scene_size = S ** 2
+    psf_size = (2 * P + 1) ** 2
+
+    psfX, psfY = index2xy((2 * P + 1,) * 2, np.arange(psf_size))
+
+    rows = np.zeros(data_size * psf_size, dtype=int)
+    cols = np.zeros_like(rows)
+
+    for k in range(data_size):
+        dx, dy = index2xy((D, D), k)
+        s = slice(k * psf_size, (k + 1) * psf_size)
+        rows[s] = k
+        cols[s] = xy2index((S, S), psfX + dx, psfY + dy)
+
+    # add entries for old-scene-based regularization
+    rows = np.append(rows, np.arange(data_size, data_size + scene_size))
+    cols = np.append(cols, np.arange(scene_size))
+
+    return rows, cols
 
 
 def load_image(fn):
@@ -111,7 +137,7 @@ class Scene(object):
     imaging data stream.
 
     """
-    def __init__(self, basepath, outdir="", psf_hw=13, size=None, sky=0.,
+    def __init__(self, basepath=".", outdir="", psf_hw=13, size=None, sky=0.,
             initial_scene=None, kernel=None, psfL2=0.25, sceneL2=1. / 64.):
         # All the metadata.
         self.basepath = os.path.abspath(basepath)
@@ -140,17 +166,13 @@ class Scene(object):
         self.psf = np.zeros((pd, pd))
         self.psf[psf_hw, psf_hw] = 1.
 
-        # Set the default PSF to be a delta function (i.e. a no-op).
-        self.default_psf = np.zeros_like(self.psf)
-        self.default_psf[psf_hw, psf_hw] = 1.
-
         # If it's not provided, initialize the scene to something reasonable.
         if initial_scene is None:
             # Initialize the scene as a centered Gaussian.
             x = np.linspace(-0.5 * self.size, 0.5 * self.size, self.size) ** 2
             r = np.sqrt(x[:, None] + x[None, :])
             self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
-            self.scene = convolve(self.scene, self.default_psf, mode="full")
+            self.scene = convolve(self.scene, self.psf, mode="full")
         else:
             self.scene = np.array(initial_scene)
 
@@ -158,20 +180,18 @@ class Scene(object):
             # Make the PSF convolution kernel here. There's a bit of black
             # MAGIC that could probably be fixed. The kernel is implicitly a
             # `sigma = 1. pix` Gaussian.
-            self.kernel = np.exp(-0.5 * (np.arange(-3, 4)[:, None] ** 2
-                + np.arange(-3, 4)[None, :] ** 2))
+            self.kernel = np.exp(-0.5 * (np.arange(-5, 6)[:, None] ** 2
+                + np.arange(-5, 6)[None, :] ** 2))
             self.kernel /= np.sum(self.kernel)
         else:
             self.kernel = kernel
 
-        # The tiny kernel is also a delta function that is used for padding.
-        Kx, Ky = self.kernel.shape
-        self.tinykernel = np.zeros_like(self.kernel)
-        self.tinykernel[(Kx - 1) / 2, (Ky - 1) / 2] = 1.
-
         # Calculate the mask that we will use to unravel the scene.
-        s = np.arange(np.product(self.scene.shape)).reshape(self.scene.shape)
-        self.scene_mask = unravel_scene(s, self.psf_hw)
+        self.scene_mask = unravel_scene(len(self.scene), self.psf_hw)
+
+        # And the PSF.
+        self.psf_rows, self.psf_cols = \
+                unravel_psf(len(self.scene), self.psf_hw)
 
     @property
     def image_list(self):
@@ -193,10 +213,12 @@ class Scene(object):
         """
         image = self.first_image
         data = trim_image(image, self.size) + self.sky
-        self.scene = convolve(data, self.default_psf, mode="full")
+        self.scene = np.zeros_like(self.scene)
+        self.scene[self.psf_hw:-self.psf_hw, self.psf_hw:-self.psf_hw] = \
+                data
 
-    def run_inference(self, npasses=5, current_pass=0, current_img=None,
-            do_centroiding=True):
+    def run_inference(self, basepath=None, npasses=5, current_pass=0,
+            current_img=None, do_centroiding=True):
         """
         Run the full inference on the dataset.
 
@@ -209,6 +231,9 @@ class Scene(object):
           pass through the data. This is used for restarting.
 
         """
+        if basepath is not None:
+            self.basepath = basepath
+
         if current_img is None:
             current_img = self.img_number
 
@@ -233,7 +258,17 @@ class Scene(object):
                         alpha = 2. / 300.  # Hack-o-rama?
                         nn = False
 
+                    # Do the inference.
                     self._inference_step(data, alpha, nn)
+
+                    # On the first pass on the first image, normalize so that
+                    # the PSF sums to ~1.
+                    if self.img_number == 0 and self.pass_number == 0:
+                        norm = np.sum(self.psf)
+                        self.scene *= norm
+                        self.psf /= norm
+
+                    # Save the output.
                     self._save_state(data)
 
             # After one full pass through the data, make sure that the index
@@ -308,12 +343,7 @@ class Scene(object):
     def _infer_scene(self, data):
         """
         Take data and a current belief about the PSF; infer the scene for
-        this image given the PSF.  This code infers a sky level
-        simultaneously.  That might seem like a detail, but it matters.
-
-        Bug: There is a reversal (a `[::-1]`) in the code that is not
-        fully understood at present.  A good guess is that it has
-        something to do with the `convolve()` operation.
+        this image given the PSF.
 
         """
         Px, Py = data.shape
@@ -323,22 +353,22 @@ class Scene(object):
         sceneSize = Nx * Ny
 
         # build psf matrix from psf
-        psfX, psfY = index2xy(self.psf.shape, np.arange(self.psf.size))
-        psfVector = self.psf.reshape(self.psf.size)[::-1]  # HACK
-        vals = np.zeros(data.size * self.psf.size)
-        rows = np.zeros_like(vals).astype(int)
-        cols = np.zeros_like(vals).astype(int)
-        for k in range(data.size):
-            dx, dy = index2xy(data.shape, k)
-            s = slice(k * self.psf.size, (k + 1) * self.psf.size)
-            vals[s] = psfVector
-            rows[s] = k
-            cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
+        # psfX, psfY = index2xy(self.psf.shape, np.arange(self.psf.size))
+        # psfVector = self.psf.reshape(self.psf.size)[::-1]  # HACK
+        # vals = np.zeros(data.size * self.psf.size)
+        # rows = np.zeros_like(vals).astype(int)
+        # cols = np.zeros_like(vals).astype(int)
+        # for k in range(data.size):
+        #     dx, dy = index2xy(data.shape, k)
+        #     s = slice(k * self.psf.size, (k + 1) * self.psf.size)
+        #     vals[s] = psfVector
+        #     rows[s] = k
+        #     cols[s] = xy2index(sceneShape, psfX + dx, psfY + dy)
 
-        # add entries for old-scene-based regularization
-        vals = np.append(vals, np.zeros(sceneSize) + self.sceneL2)
-        rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
-        cols = np.append(cols, np.arange(sceneSize))
+        # # add entries for old-scene-based regularization
+        # vals = np.append(vals, np.zeros(sceneSize) + self.sceneL2)
+        # rows = np.append(rows, np.arange(data.size, data.size + sceneSize))
+        # cols = np.append(cols, np.arange(sceneSize))
 
         psfMatrix = csr_matrix((vals, (rows, cols)),
                 shape=(data.size + sceneSize, sceneSize))
@@ -370,6 +400,8 @@ class Scene(object):
 
         hdus[0].header.update("datafn", self.fn)
         hdus[0].header.update("size", self.size)
+        hdus[0].header.update("pass_number", self.pass_number)
+        hdus[0].header.update("img_number", self.img_number)
         hdus[1].header.update("status", "old")
         hdus[2].header.update("status", "new")
 
