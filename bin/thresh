@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+"""
+This file is part of The Thresher.
+
+This is the main user entry point for The Thresher (our lucky-imaging pipeline).
+
+I hope that the name of this file changes soon! [I do too. -- Hogg]
+"""
+
+import os
+import sys
+import logging
+
+# This heinous hack let's me run this script without actually installing the
+# `lucky` package. I learned this from Steve Losh at:
+#     https://github.com/sjl/d/blob/master/bin/d
+try:
+    import lucky
+except ImportError:
+    sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+    import lucky
+
+if __name__ == '__main__':
+    import argparse
+
+    # Start by parsing the command line arguments.
+    desc = "Run online blind de-mixing on a lucky imaging data stream."
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument("basepath", type=str,
+            help="The root directory for the imaging data")
+    parser.add_argument("-o", "--output", type=str, default=None,
+            help="The directory for the output files.")
+    parser.add_argument("-i", "--init_data", action="store_true",
+            help="Initialize the scene using the first data point?")
+    parser.add_argument("--centroid", action="store_true",
+            help="Should we centroid each new data point?")
+    parser.add_argument("--size", type=int, default=None,
+            help="The size of the inferred scene.")
+    parser.add_argument("--psf_hw", type=int, default=13,
+            help="The half width of the inferred PSF image.")
+    parser.add_argument("--sky", type=float, default=1.0,
+            help="The sky level of the images")
+    parser.add_argument("-n", "--npasses", type=int, default=5,
+            help="The number of inference passes to run")
+    parser.add_argument("--log", type=str, default=None,
+            help="The filename for the log.")
+    parser.add_argument("-v", "--verbose", action="store_true",
+            help="Enable verbose logging.")
+    args = parser.parse_args()
+
+    if args.output is None:
+        outdir = os.path.join(args.basepath, "out")
+    else:
+        outdir = args.output
+
+    try:
+        os.makedirs(outdir)
+    except os.error:
+        pass
+
+    # Set up the `logging` module with the settings provided at the command
+    # line.
+    loglevel = logging.INFO
+    if args.verbose:
+        loglevel = logging.DEBUG
+    if args.log is None:
+        logging.basicConfig(level=loglevel)
+    else:
+        logfn = os.path.join(outdir, args.log)
+        logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
+
+    # Start the inference.
+    scene = lucky.Scene(args.basepath, outdir, psf_hw=args.psf_hw,
+            size=args.size, sky=args.sky)
+
+    # Initialize with the data.
+    if args.init_data:
+        scene.initialize_with_data()
+
+    scene.run_inference(npasses=args.npasses, do_centroiding=args.centroid)
