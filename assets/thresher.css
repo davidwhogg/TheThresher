@@ -8,7 +8,7 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
     color: #222;
-    margin: 0;
+    margin: 0 0 10px;
     padding: 0;
 }
 
@@ -19,6 +19,12 @@ h1, h2, h3 {
 h1 {
     font-size: 30px;
     font-weight: 600;
+}
+
+h2 {
+    color: #777;
+    font-size: 16px;
+    font-weight: 300;
 }
 
 h3, h4, h5, h6 {
@@ -41,11 +47,16 @@ code, pre {
     color: #333;
     font-size: 12px;
     padding: 1px 3px;
-
     background: #f8f8f8;
     border-radius: 5px;
     border: 1px solid #e5e5e5;
     overflow-x: auto;
+}
+
+.sidelinks {
+    list-style: none;
+    margin: 20px 0;
+    padding: 0;
 }
 
 /* LAYOUT */
@@ -63,6 +74,10 @@ header {
     float: left;
     width: 250px;
     position: fixed;
+}
+
+header h2 {
+    margin-bottom: 50px;
 }
 
 footer {

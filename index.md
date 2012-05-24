@@ -1,5 +1,6 @@
 ---
 layout: default
+sections: ["Authors", "License", "Contributors", "Notes", "Usage"]
 ---
 
 Luck isn't a factor when you are using **The Thresher**.
@@ -52,23 +53,23 @@ or full marginalization over PSF choices, don't hold your breath.
 ### Usage
 
 The data should be in a set of `FITS` files in a directory somewhere.
-To run the pipeline on this directory, run `bin/lucky` as follows:
+To run the pipeline on this directory, run `bin/thresh` as follows:
 
 ```
-bin/lucky /path/to/your/data -o /path/to/outputs --size 64
+bin/thresh /path/to/your/data -o /path/to/outputs --size 64
 ```
 
-You can run `bin/lucky -h` for more command line options.
+You can run `bin/thresh -h` for more command line options.
 
 To plot the inference in real time, start the `bin/lucky-plot` daemon
 which will monitor the output directory and generate the plots:
 
 ```
-bin/lucky-plot /path/to/outputs -m -o /path/to/plots
+bin/thresh-plot /path/to/outputs -m -o /path/to/plots
 ```
 
 To generate all of the plots for an existing run, use:
 
 ```
-bin/lucky-plot /path/to/outputs -o /path/to/plots
+bin/thresh-plot /path/to/outputs -o /path/to/plots
 ```

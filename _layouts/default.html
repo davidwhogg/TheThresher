@@ -3,7 +3,7 @@
 <head>
     <meta http-equiv="content-type" content="text/html; charset=utf-8">
 
-    <title>The Thesher &mdash; we Don't Throw Away Data(tm)</title>
+    <title>The Thesher &mdash; we Don't Throw Away Data&trade;</title>
 
     <link rel="stylesheet" href="assets/normalize.css" type="text/css" media="screen" charset="utf-8">
     <link rel="stylesheet" href="assets/thresher.css" type="text/css" media="screen" charset="utf-8">
@@ -15,7 +15,12 @@
     <div class="container">
         <header>
             <h1>The Thresher</h1>
-            <p>We Don't Throw Away Data&trade;</p>
+            <h2>We Don't Throw Away Data&trade;</h2>
+            <ul class="sidelinks">
+                {% for sect in page.sections %}
+                <li><a href="#{{ sect | downcase | replace: ' ', '-' }}">{{ sect }}</a></li>
+                {% endfor %}
+            </ul>
         </header>
 
         <section>
