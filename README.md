@@ -8,7 +8,6 @@ From [Wikipedia](http://en.wikipedia.org/wiki/Threshing):
 
 ---
 
-[Luck](http://en.wikipedia.org/wiki/Lucky_imaging) isn't a factor when you're
-using **The Thresher**.
+### [Luck](http://en.wikipedia.org/wiki/Lucky_imaging) isn't a factor when you're using **The Thresher**.
 
 Check out [the docs](http://davidwhogg.github.com/TheThresher).
