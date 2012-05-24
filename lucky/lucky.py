@@ -306,6 +306,8 @@ class Scene(object):
         if nn:
             self.scene[self.scene < 0] = 0.0
 
+        gc.collect()
+
     def _infer_psf(self, data):
         """
         Take data and a current belief about the scene; infer the psf for
