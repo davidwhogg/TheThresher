@@ -12,7 +12,6 @@ data set, but at the resolution of the best images in the data set.
 
 - **David W. Hogg**, New York University
 - **Dan Foreman-Mackey**, New York University
-- **Federica Bianco**, Las Cumbres Observatory
 
 ### License
 
@@ -24,6 +23,7 @@ license.
 
 ### Contributors
 
+- **Federica Bianco**, Las Cumbres Observatory
 - **BJ Fulton**, Las Cumbres Observatory
 - **Dustin Lang**, Princeton University Observatory
 - **Phil Marshall**, Oxford University
@@ -35,14 +35,12 @@ license.
 <http://adsabs.harvard.edu/abs/2011A%26A...531A...9H> and
 - Magain et al (1998, ApJ 494, 472)
 <http://adsabs.harvard.edu/abs/1998ApJ...494..472M>.
-One day it might get merged with
-the *[Tractor](http://thetractor.org/)*.
 
-For now, **The Thresher** is expecting to a set of single-band
-constant-pixel-scale band-limited images of the same unvarying scene.
-**The Thresher** returns the best (maximum-likelihood) band-limited
-scene that can explain those images, plus a set of point-spread
-functions, one per image.
+At its current version, **The Thresher** is expecting to a set of
+single-band constant-pixel-scale band-limited images of the same
+unvarying scene.  **The Thresher** returns the best
+(maximum-likelihood) band-limited scene that can explain those images,
+plus a set of point-spread functions, one per image.
 
 For generalizations to multi-band or multi-instrument imaging, or
 generalizations to time-variable scenes, watch this space.  For
