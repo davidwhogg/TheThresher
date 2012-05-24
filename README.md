@@ -2,8 +2,11 @@
 
 Luck isn't a factor when you are using **The Thresher**.
 
-While we recognize that you have other options available for your
-fast-camera imaging solution needs, *We Don't Throw Away Data (tm)*.
+You have taken lots of very fast imaging (think "lucky imaging"),
+hoping for good seeing.  What to do with your data?  The great
+advantage of **The Thresher** is that *We Don't Throw Away Data (tm)*.
+Our goal is to deliver the signal-to-noise contained in the entire
+data set, but at the resolution of the best images in the data set.
 
 ### Authors
 
@@ -32,8 +35,21 @@ license.
 <http://adsabs.harvard.edu/abs/2011A%26A...531A...9H> and
 - Magain et al (1998, ApJ 494, 472)
 <http://adsabs.harvard.edu/abs/1998ApJ...494..472M>.
+One day it might get merged with
+the *[Tractor](http://thetractor.org/)*.
 
-## Usage
+For now, **The Thresher** is expecting to a set of single-band
+constant-pixel-scale band-limited images of the same unvarying scene.
+**The Thresher** returns the best (maximum-likelihood) band-limited
+scene that can explain those images, plus a set of point-spread
+functions, one per image.
+
+For generalizations to multi-band or multi-instrument imaging, or
+generalizations to time-variable scenes, watch this space.  For
+generalizations that permit sampling the posterior PDF in scene space,
+or full marginalization over PSF choices, don't hold your breath.
+
+### Usage
 
 The data should be in a set of `FITS` files in a directory somewhere.
 To run the pipeline on this directory, run `bin/lucky` as follows:
