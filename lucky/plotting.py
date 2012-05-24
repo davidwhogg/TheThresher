@@ -1,3 +1,7 @@
+"""
+This file is part of The Thresher
+"""
+
 __all__ = ["plot_inference_step"]
 
 import itertools

@@ -1,5 +1,5 @@
 """
-This file is part of the Lucky Imaging project.
+This file is part of The Thresher.
 
 Issues:
 -------

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
-A set of unit tests for the lucky imaging pipeline.
+This file is part of The Thresher.
 
+A set of unit tests.
 """
 
 import os

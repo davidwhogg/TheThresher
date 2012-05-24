@@ -1,4 +1,4 @@
-all: lucky.pdf
+all: thresher.pdf
 
 %.pdf: %.tex
 	pdflatex $<

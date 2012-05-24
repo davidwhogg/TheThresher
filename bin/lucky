@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """
-This is the main user entry point for our lucky imaging pipeline.
+This file is part of The Thresher.
 
-I hope that the name of this file changes soon!
+This is the main user entry point for The Thresher (our lucky-imaging pipeline).
 
+I hope that the name of this file changes soon! [I do too. -- Hogg]
 """
 
 import os
