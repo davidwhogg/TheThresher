@@ -3,13 +3,13 @@ layout: default
 sections: ["Authors", "License", "Contributors", "Notes", "Usage"]
 ---
 
-Luck isn't a factor when you are using **The Thresher**.
+Luck isn't a factor when you're using **The Thresher**.
 
 You have taken lots of very fast imaging (think "lucky imaging"),
 hoping for good seeing.  What to do with your data?  The great
 advantage of **The Thresher** is that *We Don't Throw Away Data (tm)*.
 Our goal is to deliver the signal-to-noise contained in the entire
-data set, but at the resolution of the best images in the data set.
+data set, but at the resolution of the *best* images in the data set.
 
 ### Authors
 
