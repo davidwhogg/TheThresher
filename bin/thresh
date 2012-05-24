@@ -2,9 +2,9 @@
 """
 This file is part of The Thresher.
 
-This is the main user entry point for The Thresher (our lucky-imaging pipeline).
+This is the main user entry point for The Thresher (our lucky-imaging
+replacement pipeline).
 
-I hope that the name of this file changes soon! [I do too. -- Hogg]
 """
 
 import os
@@ -12,13 +12,13 @@ import sys
 import logging
 
 # This heinous hack let's me run this script without actually installing the
-# `lucky` package. I learned this from Steve Losh at:
+# `thresher` module. I learned this from Steve Losh at:
 #     https://github.com/sjl/d/blob/master/bin/d
 try:
-    import lucky
+    import thresher
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
-    import lucky
+    import thresher
 
 if __name__ == '__main__':
     import argparse
@@ -70,7 +70,7 @@ if __name__ == '__main__':
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
     # Start the inference.
-    scene = lucky.Scene(args.basepath, outdir, psf_hw=args.psf_hw,
+    scene = thresher.Scene(args.basepath, outdir, psf_hw=args.psf_hw,
             size=args.size, sky=args.sky)
 
     # Initialize with the data.

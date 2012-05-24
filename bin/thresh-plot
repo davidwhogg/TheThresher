@@ -2,8 +2,9 @@
 """
 This file is part of The Thresher.
 
-This script plots the results of a `lucky` run.  It can also monitor
+This script plots the results of a `thresher` run.  It can also monitor
 the output directory for real time plotting.
+
 """
 
 import os
@@ -19,13 +20,13 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 # This heinous hack let's me run this script without actually installing the
-# `lucky` package. I learned this from Steve Losh at:
+# `thresher` module. I learned this from Steve Losh at:
 #     https://github.com/sjl/d/blob/master/bin/d
 try:
-    import lucky
+    import thresher
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
-    import lucky
+    import thresher
 
 
 _fig = pl.figure(figsize=(16, 12))
@@ -40,8 +41,8 @@ def plot_state(fn, outdir):
     kernel = np.array(hdus[4].data, dtype=float)
     hdus.close()
 
-    lucky.plot_inference_step(_fig, data, this_scene, new_scene, psf, kernel,
-            meta=["Image {0:d}".format(hdus[0].header.get("image"))])
+    thresher.plot_inference_step(_fig, data, this_scene, new_scene, psf,
+            kernel, meta=["Image {0:d}".format(hdus[0].header.get("image"))])
 
     imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
             + ".png")

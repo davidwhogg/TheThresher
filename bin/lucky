@@ -8,13 +8,13 @@ import sys
 import logging
 
 # This heinous hack let's me run this script without actually installing the
-# `lucky` package. I learned this from Steve Losh at:
+# `thresher` module. I learned this from Steve Losh at:
 #     https://github.com/sjl/d/blob/master/bin/d
 try:
-    import lucky
+    import thresher
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
-    import lucky
+    import thresher
 
 if __name__ == '__main__':
     import argparse
@@ -49,12 +49,12 @@ if __name__ == '__main__':
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
     # Run the pipeline.
-    scene = lucky.Scene(args.basepath)
+    scene = thresher.Scene(args.basepath)
 
     results = {}
     for fn in scene.image_list:
-        image = lucky.load_image(fn)
-        data = float(lucky.centroid_image(image, scene.scene, 1))
+        image = thresher.load_image(fn)
+        data = float(thresher.centroid_image(image, scene.scene, 1))
 
         k = os.path.split(fn)[-1]
         results[k] = data
