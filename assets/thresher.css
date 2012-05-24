@@ -1,0 +1,79 @@
+/* TYPOGRAPHY */
+
+body {
+    font: 14px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #777;
+    font-weight: 300;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #222;
+    margin: 0;
+    padding: 0;
+}
+
+h1, h2, h3 {
+    line-height: 1.1;
+}
+
+h1 {
+    font-size: 30px;
+    font-weight: 600;
+}
+
+h3, h4, h5, h6 {
+    color: #494949;
+}
+
+a {
+    color: #39c;
+    font-weight: 400;
+    text-decoration: none;
+}
+
+small {
+    color: #ccc;
+    font-size: 11px;
+}
+
+code, pre {
+    font-family: Monaco, "Bitstream Vera Sans Mono", "Lucida Console", Terminal;
+    color: #333;
+    font-size: 12px;
+    padding: 1px 3px;
+
+    background: #f8f8f8;
+    border-radius: 5px;
+    border: 1px solid #e5e5e5;
+    overflow-x: auto;
+}
+
+/* LAYOUT */
+
+body {
+    padding: 50px;
+}
+
+.container {
+    width: 850px;
+    margin: 0 auto;
+}
+
+header {
+    float: left;
+    width: 250px;
+    position: fixed;
+}
+
+footer {
+    float: left;
+    width: 250px;
+    position: fixed;
+    bottom: 20px;
+}
+
+section {
+    width: 540px;
+    float: right;
+    padding-bottom: 50px;
+}
