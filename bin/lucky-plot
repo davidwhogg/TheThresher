@@ -28,7 +28,7 @@ except ImportError:
     import lucky
 
 
-_fig = pl.figure(figsize=(12, 12))
+_fig = pl.figure(figsize=(16, 12))
 
 
 def plot_state(fn, outdir):
@@ -40,7 +40,8 @@ def plot_state(fn, outdir):
     kernel = np.array(hdus[4].data, dtype=float)
     hdus.close()
 
-    lucky.plot_inference_step(_fig, data, this_scene, new_scene, psf, kernel)
+    lucky.plot_inference_step(_fig, data, this_scene, new_scene, psf, kernel,
+            meta=["Image {0:d}".format(hdus[0].header.get("image"))])
 
     imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
             + ".png")
