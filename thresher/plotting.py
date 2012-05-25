@@ -9,6 +9,7 @@ import itertools
 
 import numpy as np
 from scipy.signal import convolve
+from scipy.special import erf
 
 
 def plot_image(ax, img, size=None, vrange=None):
@@ -74,9 +75,22 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
         axes[-1].set_xticklabels([])
         axes[-1].set_yticklabels([])
 
-    # Calculate the stretch.
-    a, b = np.median(new_scene), np.sort(new_scene.flatten())[0.975 * new_scene.size]
-    scene_range = np.array([-5, 10]) * (b - a)
+    # Let's estimate the variance of new_scene. Hack anyone?
+    nsigma = np.arange(1, 5)
+    fracs = 1 - 0.5 * (1 - erf(nsigma / np.sqrt(2)))
+    median = np.median(new_scene)
+
+    scene_sort = np.sort(new_scene.flatten())
+    mask = np.array(fracs * new_scene.size, dtype=int)
+    quantiles = scene_sort[mask]
+
+    sigmas = (quantiles - median) / nsigma
+    ind = np.arange(len(sigmas))[sigmas > 0][1]
+    sigma = sigmas[ind]
+
+    print "Scene median and quantiles and index:", median, quantiles, mask
+
+    scene_range = np.array([-10, 20]) * sigma
 
     # Set up which data will go in which panel.
     predicted = convolve(this_scene, dpsf, mode="valid")
@@ -86,11 +100,11 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
     panels = [[("PSF", psf),
                ("Data", data, np.median(data) + scene_range * norm),
                ("This Scene", this_scene, np.median(this_scene) + scene_range),
-               ("This Scene", this_scene, np.median(this_scene) + 0.25 * scene_range)],
+               ("This Scene", this_scene, np.median(this_scene) + 0.1 * scene_range)],
               [("dPSF", dpsf),
                (r"dPSF $\ast$ This Scene", predicted, np.median(predicted) + scene_range * norm),
                ("New Scene", new_scene, np.median(new_scene) + scene_range),
-               ("New Scene", new_scene, np.median(new_scene) + 0.25 * scene_range)],
+               ("New Scene", new_scene, np.median(new_scene) + 0.1 * scene_range)],
               [("", None),
                (r"Data - dPSF $\ast$ This Scene", delta, np.median(delta) + scene_range),
                ("Update", new_scene - this_scene),
@@ -107,7 +121,8 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
         else:
             vrange = None
 
-        vrange = None
+        # if content is not None:
+        #     print title, content.min(), content.max(), vrange
 
         if content is not None:
             plot_image(ax, content, size=size, vrange=vrange)

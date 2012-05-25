@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
     # Start the inference.
     scene = thresher.Scene(args.basepath, outdir, psf_hw=args.psf_hw,
-            size=args.size, sky=args.sky, psfL2=args.psfreg,
+            size=args.size, sky=args.sky, psfreg=args.psfreg,
             sceneL2=args.sceneL2)
 
     # Initialize with the data.

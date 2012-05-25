@@ -248,7 +248,7 @@ class Scene(object):
                     else:
                         data = trim_image(image, self.size)
 
-                    data += self.sky + np.min(data)
+                    data += self.sky - np.min(data)
 
                     # If it's the first pass, `alpha` should decay and we
                     # should use _non-negative_ optimization.
