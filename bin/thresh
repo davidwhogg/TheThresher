@@ -38,6 +38,10 @@ if __name__ == '__main__':
             help="The size of the inferred scene.")
     parser.add_argument("--psf_hw", type=int, default=13,
             help="The half width of the inferred PSF image.")
+    parser.add_argument("--psfreg", type=float, default=100.,
+            help="The strength of the sum-to-one regularization on the PSF.")
+    parser.add_argument("--sceneL2", type=float, default=1. / 64.,
+            help="The strength of the L2 regularization on the scene.")
     parser.add_argument("--sky", type=float, default=1.0,
             help="The sky level of the images")
     parser.add_argument("-n", "--npasses", type=int, default=5,
@@ -71,7 +75,8 @@ if __name__ == '__main__':
 
     # Start the inference.
     scene = thresher.Scene(args.basepath, outdir, psf_hw=args.psf_hw,
-            size=args.size, sky=args.sky)
+            size=args.size, sky=args.sky, psfL2=args.psfreg,
+            sceneL2=args.sceneL2)
 
     # Initialize with the data.
     if args.init_data:

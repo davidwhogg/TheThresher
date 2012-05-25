@@ -138,7 +138,7 @@ class Scene(object):
 
     """
     def __init__(self, basepath=".", outdir="", psf_hw=13, size=None, sky=0.,
-            initial_scene=None, kernel=None, psfL2=0.25, sceneL2=1. / 64.):
+            initial_scene=None, kernel=None, psfreg=100., sceneL2=1. / 64.):
         # All the metadata.
         self.basepath = os.path.abspath(basepath)
         self.outdir = os.path.abspath(outdir)
@@ -158,7 +158,7 @@ class Scene(object):
             self.size = size
 
         # L2 norm weights.
-        self.psfL2 = psfL2
+        self.psfreg = psfreg
         self.sceneL2 = sceneL2
 
         # Initialize the PSF image as a delta function.
@@ -256,13 +256,12 @@ class Scene(object):
                         alpha = min(2. / (1 + self.img_number), 0.25)
                         nn = True
                     else:
-                        # self.scene -= np.median(self.scene)  # Hackeroni?
-                        alpha = 2. / N  # Hack-o-rama?
+                        alpha = 2. / N  # MAGIC: 2.
                         nn = False
 
                     # On the first pass on the first image, normalize so that
                     # the PSF sums to ~1.
-                    if self.img_number == 0 and self.pass_number == 0:
+                    if self.img_number == 0:
                         self._infer_psf(data)
 
                         # Properly normalize the PSF.
@@ -327,12 +326,7 @@ class Scene(object):
         # Build scene matrix from kernel-convolved scene.
         kc_scene = self.scene
 
-        if useL2:
-            N = psf_size
-        else:
-            N = 1
-
-        scene_matrix = np.zeros((data_size + N, psf_size + 1))
+        scene_matrix = np.zeros((data_size + 1, psf_size + 1))
 
         # Unravel the scene.
         scene_matrix[:data_size, :psf_size] = \
@@ -341,13 +335,8 @@ class Scene(object):
         # Add the sky.
         scene_matrix[:data.size, psf_size] = 1
 
-        if useL2:
-            # And the L2 regularization.
-            scene_matrix[data_size:, :psf_size] = self.psfL2 * np.eye(psf_size)
-            data_vector = np.append(data.flatten(), np.zeros(psf_size))
-        else:
-            scene_matrix[data_size, :psf_size] = self.psfL2 * 1.
-            data_vector = np.append(data.flatten(), np.ones(1))
+        scene_matrix[data_size, :psf_size] = self.psfreg * 1.
+        data_vector = np.append(data.flatten(), self.psfreg * np.ones(1))
 
         # Infer the new PSF.
         new_psf, rnorm = op.nnls(scene_matrix, data_vector)
@@ -364,40 +353,22 @@ class Scene(object):
         this image given the PSF.
 
         """
-        # The dimensions.
-        P = 2 * self.psf_hw + 1
-        psf_size = P ** 2
-
-        D = data.shape[0]
-        data_size = D ** 2
-
-        S = self.scene.shape[0]
-        scene_size = S ** 2
-
-        kc_psf = self.psf  # convolve(self.psf, self.kernel, mode="same")
-
         # NOTE: the PSF is reversed here.
-        vals = np.zeros((data_size, psf_size)) + kc_psf.flatten()[None, ::-1]
+        vals = np.zeros((data.size, self.psf.size)) \
+                + self.psf.flatten()[None, ::-1]
         vals = vals.flatten()
 
         # Append the identity for the L2 norm.
-        vals = np.append(vals, np.ones(scene_size))
+        vals = np.append(vals, self.sceneL2 + np.zeros(self.scene.size))
 
         psf_matrix = csr_matrix((vals, (self.psf_rows, self.psf_cols)),
-                shape=(data_size + scene_size, scene_size))
+                shape=(data.size + self.scene.size, self.scene.size))
 
         # Infer scene and return
-        data_vector = np.append(data.flatten(), np.zeros(scene_size))
+        data_vector = np.append(data.flatten(), np.zeros(self.scene.size))
         results = lsqr(psf_matrix, data_vector)
 
-        new_scene = results[0].reshape((S, S))
-        # new_scene -= np.median(new_scene)
-
-        # logging.info("Got scene {0}, Min: {1}, Median: {2}, Max: {3}"
-        #         .format(newScene.shape, newScene.min(), np.median(newScene),
-        #             newScene.max()))
-
-        # gc.collect()
+        new_scene = results[0].reshape(self.scene.shape)
 
         return new_scene
 

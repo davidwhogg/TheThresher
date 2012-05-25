@@ -1,5 +1,6 @@
 """
 This file is part of The Thresher
+
 """
 
 __all__ = ["plot_inference_step"]
@@ -105,6 +106,8 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
             vrange = panel[2]
         else:
             vrange = None
+
+        vrange = None
 
         if content is not None:
             plot_image(ax, content, size=size, vrange=vrange)
