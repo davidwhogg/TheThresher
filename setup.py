@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# FIXME: test
+
 from distutils.core import setup
 
 desc = open("README.md").read()

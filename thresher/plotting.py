@@ -74,29 +74,25 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
         axes[-1].set_yticklabels([])
 
     # Calculate the stretch.
-    a, b = np.median(data), np.max(data)
-    vrange = (a - 0.2 * b, a + b)
-
-    # Hard stretch the inferred scene.
-    a, b = np.median(new_scene), 0.2 * np.max(new_scene)
-    vrange_hard = (a - 0.2 * b, a + b)
+    a, b = np.median(new_scene), np.sort(new_scene.flatten())[0.975 * new_scene.size]
+    scene_range = np.array([-5, 10]) * (b - a)
 
     # Set up which data will go in which panel.
     predicted = convolve(this_scene, dpsf, mode="valid")
     delta = data - predicted
-    psf = convolve(dpsf, kernel, mode="valid")
+    psf = convolve(dpsf, kernel, mode="same")
     norm = np.sum(dpsf)
     panels = [[("PSF", psf),
-               ("Data", data, vrange),
-               ("This Scene", norm * this_scene, vrange),
-               ("This Scene", this_scene, vrange_hard)],
+               ("Data", data, np.median(data) + scene_range * norm),
+               ("This Scene", this_scene, np.median(this_scene) + scene_range),
+               ("This Scene", this_scene, np.median(this_scene) + 0.25 * scene_range)],
               [("dPSF", dpsf),
-               (r"dPSF $\ast$ This Scene", predicted, vrange),
-               ("New Scene", new_scene),
-               ("New Scene", new_scene, vrange_hard)],
+               (r"dPSF $\ast$ This Scene", predicted, np.median(predicted) + scene_range * norm),
+               ("New Scene", new_scene, np.median(new_scene) + scene_range),
+               ("New Scene", new_scene, np.median(new_scene) + 0.25 * scene_range)],
               [("", None),
-               (r"Data - dPSF $\ast$ This Scene", delta, vrange),
-               ("Update", new_scene - this_scene, vrange),
+               (r"Data - dPSF $\ast$ This Scene", delta, np.median(delta) + scene_range),
+               ("Update", new_scene - this_scene),
                ("annotations", None)]]
 
     # Do the plotting.

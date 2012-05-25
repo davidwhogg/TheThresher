@@ -237,6 +237,8 @@ class Scene(object):
         if current_img is None:
             current_img = self.img_number
 
+        N = len([i for i in self.image_list])
+
         for self.pass_number in xrange(current_pass, npasses):
             for self.img_number, self.fn in enumerate(self.image_list):
                 if self.img_number >= current_img:
@@ -246,7 +248,7 @@ class Scene(object):
                     else:
                         data = trim_image(image, self.size)
 
-                    data += self.sky
+                    data += self.sky + np.min(data)
 
                     # If it's the first pass, `alpha` should decay and we
                     # should use _non-negative_ optimization.
@@ -255,7 +257,7 @@ class Scene(object):
                         nn = True
                     else:
                         # self.scene -= np.median(self.scene)  # Hackeroni?
-                        alpha = 2. / 300.  # Hack-o-rama?
+                        alpha = 2. / N  # Hack-o-rama?
                         nn = False
 
                     # On the first pass on the first image, normalize so that
@@ -308,7 +310,7 @@ class Scene(object):
 
         gc.collect()
 
-    def _infer_psf(self, data):
+    def _infer_psf(self, data, useL2=False):
         """
         Take data and a current belief about the scene; infer the psf for
         this image given the scene.  This code infers a sky level
@@ -323,8 +325,14 @@ class Scene(object):
         data_size = D ** 2
 
         # Build scene matrix from kernel-convolved scene.
-        kc_scene = self.scene  # convolve(self.scene, self.kernel, mode="same")
-        scene_matrix = np.zeros((data_size + psf_size, psf_size + 1))
+        kc_scene = self.scene
+
+        if useL2:
+            N = psf_size
+        else:
+            N = 1
+
+        scene_matrix = np.zeros((data_size + N, psf_size + 1))
 
         # Unravel the scene.
         scene_matrix[:data_size, :psf_size] = \
@@ -333,11 +341,13 @@ class Scene(object):
         # Add the sky.
         scene_matrix[:data.size, psf_size] = 1
 
-        # And the L2 regularization.
-        scene_matrix[data_size:, :psf_size] = self.psfL2 * np.eye(psf_size)
-
-        # Build the data vector.
-        data_vector = np.append(data.flatten(), np.zeros(psf_size))
+        if useL2:
+            # And the L2 regularization.
+            scene_matrix[data_size:, :psf_size] = self.psfL2 * np.eye(psf_size)
+            data_vector = np.append(data.flatten(), np.zeros(psf_size))
+        else:
+            scene_matrix[data_size, :psf_size] = self.psfL2 * 1.
+            data_vector = np.append(data.flatten(), np.ones(1))
 
         # Infer the new PSF.
         new_psf, rnorm = op.nnls(scene_matrix, data_vector)

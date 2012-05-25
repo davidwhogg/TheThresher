@@ -67,6 +67,8 @@ if __name__ == '__main__':
             help="The directory to monitor.")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The directory for the output files.")
+    parser.add_argument("--re", type=str, default="*.fits",
+            help="Which files?")
     parser.add_argument("-m", "--monitor", action="store_true",
             help="Monitor the directory and plot in real time")
     args = parser.parse_args()
@@ -102,5 +104,5 @@ if __name__ == '__main__':
             observer.stop()
         observer.join()
     else:
-        for f in glob.glob(os.path.join(bp, "*.fits")):
+        for f in glob.glob(os.path.join(bp, args.re)):
             plot_state(f, outdir)
