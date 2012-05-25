@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """
-This script plots the results of a `lucky` run and it can monitor the output
-directory for real time plotting.
+This file is part of The Thresher.
+
+This script plots the results of a `thresher` run.  It can also monitor
+the output directory for real time plotting.
 
 """
 
@@ -18,29 +20,34 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 # This heinous hack let's me run this script without actually installing the
-# `lucky` package. I learned this from Steve Losh at:
+# `thresher` module. I learned this from Steve Losh at:
 #     https://github.com/sjl/d/blob/master/bin/d
 try:
-    import lucky
+    import thresher
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
-    import lucky
+    import thresher
 
 
-_fig = pl.figure(figsize=(12, 8))
+_fig = pl.figure(figsize=(16, 12))
 
 
 def plot_state(fn, outdir):
     hdus = pyfits.open(fn)
     data = np.array(hdus[0].data, dtype=float)
-    old_scene = np.array(hdus[1].data, dtype=float)
-    scene = np.array(hdus[2].data, dtype=float)
+    this_scene = np.array(hdus[1].data, dtype=float)
+    new_scene = np.array(hdus[2].data, dtype=float)
     psf = np.array(hdus[3].data, dtype=float)
+    kernel = np.array(hdus[4].data, dtype=float)
     hdus.close()
+
+    thresher.plot_inference_step(_fig, data, this_scene, new_scene, psf,
+            kernel, meta=["Image {0:d}".format(hdus[0].header.get("image"))])
 
     imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
             + ".png")
-    lucky.plot_inference_step(_fig, data, old_scene, psf, scene, imgfn)
+    logging.info("Saving figure to: {0}".format(imgfn))
+    pl.savefig(imgfn)
 
 
 class PlottingHandler(FileSystemEventHandler):
@@ -60,6 +67,8 @@ if __name__ == '__main__':
             help="The directory to monitor.")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The directory for the output files.")
+    parser.add_argument("--re", type=str, default="*.fits",
+            help="Which files?")
     parser.add_argument("-m", "--monitor", action="store_true",
             help="Monitor the directory and plot in real time")
     args = parser.parse_args()
@@ -95,5 +104,5 @@ if __name__ == '__main__':
             observer.stop()
         observer.join()
     else:
-        for f in glob.glob(os.path.join(bp, "*.fits")):
+        for f in glob.glob(os.path.join(bp, args.re)):
             plot_state(f, outdir)

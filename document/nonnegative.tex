@@ -1,0 +1,71 @@
+% This file is part of The Thresher.
+
+% to-do
+% -----
+% - do work
+% - write first draft
+% - make and insert figures
+
+\documentclass[12pt,preprint]{aastex}
+
+\newcounter{address}
+\setcounter{address}{0}
+\newcommand{\foreign}[1]{\textit{#1}}
+\newcommand{\etal}{\foreign{et~al.}}
+\newcommand{\project}[1]{\textsl{#1}}
+\newcommand{\TheThresher}{\project{The~Thresher}}
+\newcommand{\documentname}{\textsl{Article}}
+
+\newcommand{\given}{\,|\,}
+\newcommand{\transpose}[1]{{#1}^{\mathsf{T}}}
+
+\title{Non-negative priors or regularizations:
+  Costs and benefits for astronomers}
+\author{
+  David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA},\ref{email}}
+  and others
+}
+
+\setcounter{address}{1}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{CCPP} Center
+  for Cosmology and Particle Physics, Department of Physics, New York
+  University, 4 Washington Place, New York, NY 10003}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{MPIA}
+  Max-Planck-Institut f\"ur Astronomie, K\"onigstuhl 17, D-69117
+  Heidelberg, Germany}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{email} To whom
+  correspondence should be addressed: \texttt{david.hogg@nyu.edu}}
+
+\begin{abstract}
+Non-negative helps with x and y.  It hurts with w and z.
+\end{abstract}
+
+\begin{document}
+
+\textbf{[This document is a very early draft dated 2012-05-25.  Please do not cite it without the permission of the authors.]}
+
+\acknowledgements It is a pleasure to thank
+  Mike Blanton (NYU),
+  Adam Bolton (Utah),
+  Brendon Brewer (UCSB),
+  Dan Foreman-Mackey (NYU),
+  Stefan Harmeling (T\"ubingen),
+  Michael Hirsch (UCL),
+  Dustin Lang (CMU),
+  Phil Marshall (Oxford), and
+  Bernhard Sch\"olkopf (T\"ubingen)
+for contributions and comments.  DWH was partially
+supported by NASA (grant GRANT NUMBER HERE) and the NSF (grant
+IIS-1124794).  This project made use of the NASA \project{Astrophysics
+  Data System}, and code in the the \project{numpy}, \project{scipy},
+and \project{matplotlib} open-source projects.  All the code used in
+this paper is available at [URL HERE].
+
+\begin{thebibliography}{70}
+\bibitem[Hirsch \etal(2011)]{hirsch}
+Hirsch,~M., Harmeling,~S., Sra,~S., Sch\"olkopf,~B., 2011, \aap, 531, A9
+\bibitem[Magain \etal(1998)]{magain}
+Magain,~P., Courbin,~F., Sohy,~S., 1998, \apj, 494, 472 
+\end{thebibliography}
+
+\end{document}
