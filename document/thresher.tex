@@ -1,4 +1,4 @@
-% this file is part of the Lucky Imaging project
+% This file is part of The Thresher.
 
 % to-do
 % -----
@@ -6,6 +6,7 @@
 % - write first draft
 % - make and insert figures
 % - send to Lauer, Marshall, Kendrew, Brandner, Crotts for comments
+% - will require a full notation audit!
 
 \documentclass[12pt,preprint]{aastex}
 
@@ -20,6 +21,10 @@
 
 \newcommand{\given}{\,|\,}
 \newcommand{\transpose}[1]{{#1}^{\mathsf{T}}}
+\newcommand{\data}{D}
+\newcommand{\scene}{S}
+\newcommand{\psf}{\psi}
+\newcommand{\dpsf}{\tilde{\psi}}
 
 \title{DRAFT: \TheThresher: \\
   Lucky imaging without the terrible, \emph{terrible} waste \\
@@ -46,18 +51,18 @@
 \begin{abstract}
 We present a new method---and a new data-processing pipeline---for
 working with Lucky Imaging data, in which high-resolution images are
-obtained by combining very large numbers of short exposures under a
-variable point-spread-function-distorting atmosphere.  The method is
-based on previous work on multi-frame deconvolution; it is valuable
-because it does \emph{not} involve discarding any data whatsoever.
-The method works by extracting information about the scene from every
-image, no matter what that image's PSF.  We demonstrate the method on
-data taken with the \LCOGT\ lucky imaging system.
+obtained by combining very large numbers of short exposures taken
+under a variable point-spread function.  The method is based on
+previous work on multi-frame deconvolution; it is valuable because it
+does \emph{not} involve discarding any data whatsoever.  The method
+works by extracting information about the high-resolution scene from
+every image, no matter what that image's PSF.  We demonstrate the
+method on data taken with the \LCOGT\ lucky imaging system.
 \end{abstract}
 
 \begin{document}
 
-\textbf{[This document is a very early draft dated 2012-05-03.  Please do not cite it without the permission of the authors.]}
+\textbf{[This document is a very early draft dated 2012-05-25.  Please do not cite it without the permission of the authors.]}
 
 \section{Introduction}
 
@@ -143,29 +148,29 @@ To make our ideas about imaging concrete, we can represent the model
 that will be used throughout this paper for imaging data as a
 convolution
 \begin{eqnarray}\displaystyle
-D_n &=& \psi_n \ast I + E_n
+\data_n &=& \psf_n \ast \scene + E_n
 \quad ,
 \end{eqnarray}
-where $D_n$ is the data image---one of $N$ noisy $M$-pixel
-images---with index $1<n<N$, $\psi_n$ is the pixel-convolved PSF
+where $\data_n$ is the data image---one of $N$ noisy $M$-pixel
+images---with index $1<n<N$, $\psf_n$ is the pixel-convolved PSF
 appropriate for image $n$, $\ast$ represents the convolution
-operation, $I$ is the intensity field above the atmosphere, and $E_n$
-is the noise contribution to image $n$.  Convolution is a linear
-operation, so, following \citet{hirsch}, we can write the model in two
-equivalent ways:
+operation, $\scene$ is the ``true'' intensity field (``scene'') above
+the atmosphere, and $E_n$ is the noise contribution to image $n$.
+Convolution is a linear operation, so, following \citet{hirsch}, we
+can write the model in two equivalent ways:
 \begin{eqnarray}\displaystyle
 d_n &=& P_n \cdot s + e_n
 \\
 d_n &=& S \cdot p_n + e_n
 \quad ,
 \end{eqnarray}
-where now $d_n$ is the original data image $D_n$ reformatted as a
+where now $d_n$ is the original data image $\data_n$ reformatted as a
 one-dimensional length-$M$ column vector, $P_n$ is a $W\times M$
 sparse matrix that contains $K$ independent values representing the
 point-spread function for image $n$ on a frighteningly reformatted
 pixel grid, $s$ is a length-$W$ column vector representing the true
 scene, $e_n$ is a length-$M$ column vector of noise constributions to
-image $n$, $S$ is a $K\times M$ sparse matrix that contains $W$
+image $n$, $\scene$ is a $K\times M$ sparse matrix that contains $W$
 independent values representing the true scene also frighteningly
 reformatted, and $p_n$ is a length-$K$ column vector representing the
 PSF.  The idea is that if the image data are unwrapped into a
@@ -202,13 +207,13 @@ when interferometric data are ``cleaned''.
 
 Now, with an error model---a probabilistic description of how the
 $E_n$ image (or equivalently, $e_n$ vector) is generated---we can
-write down a likelihood function or a probability for the data $D_n$
+write down a likelihood function or a probability for the data $\data_n$
 (or equivalently $d_n$) given the model parameters $p_n$ and $s$.  For
 example, if the $M$ per-pixel noise contributions are (independently)
 drawn from Gaussians with zero means then this likelihood has the
 incredibly simple form
 \begin{eqnarray}\displaystyle
-\ln p(D_n\given p_n, s) &=& Q - \frac{1}{2}\,\chi^2_n
+\ln p(\data_n\given p_n, s) &=& Q - \frac{1}{2}\,\chi^2_n
 \\
 \chi^2_n &\equiv& \transpose{[d_n - P_n \cdot s]} \cdot C^{-1} \cdot [d_n - P_n \cdot s]
 \quad ,
@@ -222,7 +227,7 @@ be made non-independent by adding off-diagonal terms to $C^{-1}$.)
 
 With some priors, we can even in principle write down a posterior
 probability distribution function over true scenes $s$ and PSFs $p_n$
-given the data (the set of all $N$ images $D_n$ or vectors $d_n$).
+given the data (the set of all $N$ images $\data_n$ or vectors $d_n$).
 This posterior PDF can even be \emph{marginalized} over all possible
 PSFs to leave us with a marginalized posterior PDF for just the true
 scene $s$.  That would be just about the best we could possibly do in
@@ -255,26 +260,28 @@ dangerous?..
 
 \section{The method and pipeline}
 
-The method is, for each of $N$ data images $D_n$ taken in turn:
+The method is, for each of $N$ data images $\data_n$ taken in turn:
 
-1. Use the current scene image $S$ to infer the PSF $\psi_n$ for data
-image $D_n$ by non-negative least squares.  The PSF model at this
+1. Use the current scene image $\scene$ to infer the PSF $\psf_n$ for data
+image $\data_n$ by non-negative least squares.  The PSF model at this
 stage is a fixed-grid mixture of $\sigma=1$~pix ($FWHM = 2.35$~pix)
 two-dimensional, circular Gaussians.  In detail, when we infer the
 PSF, we also infer a sky level, and apply a L2 regularization to keep
 the PSF smooth when there are degeneracies.
 
-2. ``Deconvolve'' the PSF by replacing the mixture of Gaussians with a
-mixture of delta-functions, with the same amplitudes.  This follows
-the general idea of band-limited deconvolution \citep{magain}.
+2. ``Deconvolve'' the PSF $\psf_n$ to make the deconvolved PSF
+$\dpsf_n$. We perform this deconvolution by replacing the mixture of
+Gaussians with a mixture of delta-functions, with the same amplitudes.
+This follows the general idea of band-limited deconvolution
+\citep{magain}.
 
-3. Infer the scene $S_n$ implied by this data image $D_n$ given the
-deconvolved PSF.  This fit is done without constraints except a small
-regularization to deal with the fact that the scene is bigger than the
-data image.
+3. Infer the scene $\scene_n$ implied by this data image $\data_n$ given the
+deconvolved PSF $\dpsf_n$.  This fit is done without constraints
+except a small regularization to deal with the fact that the scene is
+bigger than the data image.
 
-4. Update the scene by combining the current scene $S$ with the newly
-inferred scene $S_n$ according to
+4. Update the scene by combining the current scene $\scene$ with the newly
+inferred scene $\scene_n$ according to
 \begin{eqnarray}\displaystyle
 S &\leftarrow& [1-\alpha_n]\,S + \alpha_n\,S_n
 \quad ,
@@ -288,22 +295,25 @@ regularizations.
 \section{Discussion}
 
 \acknowledgements It is a pleasure to thank
+  Mike Blanton (NYU),
   Adam Bolton (Utah),
   Brendon Brewer (UCSB),
   Stefan Harmeling (T\"ubingen),
   Michael Hirsch (UCL),
   Phil Marshall (Oxford), and
   Bernhard Sch\"olkopf (T\"ubingen)
-for contributions and comments.  We
-also single out Dustin Lang (CMU) and Robert Lupton (Princeton) for
-special thanks; DWH wouldn't understand anything about imaging if it
-weren't for the many years of discussions.  DWH and DFM were partially
-supported by NASA (grant GRANT NUMBER HERE) and the NSF (grant
-IIS-1124794).  This project made use of the NASA \project{Astrophysics
-  Data System}, and code in the the \project{numpy}, \project{scipy},
-and \project{matplotlib} open-source projects.  All the code used in
-this paper is available at [URL HERE], and sample data are available
-at [URL HERE].
+for contributions and comments.  We also single out
+  Dustin Lang (CMU) and
+  Robert Lupton (Princeton)
+for special thanks; DWH wouldn't understand anything about imaging if
+it weren't for the many years of discussions.  DWH and DFM were
+partially supported by NASA (grant GRANT NUMBER HERE) and the NSF
+(grant IIS-1124794).  This project made use of the NASA
+\project{Astrophysics Data System}, and code in the the
+\project{numpy}, \project{scipy}, and \project{matplotlib} open-source
+projects.  All the code used in this paper is available at
+\url{http://davidwhogg.github.com/TheThresher/}, and sample data are
+available at [URL HERE].
 
 \begin{thebibliography}{70}
 \bibitem[Hirsch \etal(2011)]{hirsch}
