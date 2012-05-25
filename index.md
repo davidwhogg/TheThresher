@@ -13,12 +13,12 @@ data set, but at the resolution of the *best* images in the data set.
 
 ### Authors
 
-- **David W. Hogg**, New York University
-- **Dan Foreman-Mackey**, New York University
+- **[David W. Hogg](http://cosmo.nyu.edu/hogg/)**, New York University
+- **[Dan Foreman-Mackey](http://danfm.ca/)**, New York University
 
 ### License
 
-&copy; 2012 David W. Hogg & Dan Foreman-Mackey.
+Copyright 2012 David W. Hogg & Dan Foreman-Mackey.
 
 The Thresher is free software licensed under the **GNU General Public
 License Version 2**.  See the file LICENSE for the full terms of this
