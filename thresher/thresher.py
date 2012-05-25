@@ -302,7 +302,7 @@ class Scene(object):
         self.scene = (1 - alpha) * self.scene \
                                 + alpha * self.this_scene
 
-        # self.scene -= np.median(self.scene)  # Crazy hackishness!
+        self.scene -= np.median(self.scene)  # Crazy hack!
 
         if nn:
             self.scene[self.scene < 0] = 0.0
