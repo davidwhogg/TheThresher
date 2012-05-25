@@ -1,4 +1,4 @@
-all: thresher.pdf
+all: thresher.pdf nonnegative.pdf
 
 %.pdf: %.tex
 	pdflatex $<
