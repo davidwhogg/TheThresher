@@ -11,5 +11,6 @@ data-triple
 venv
 nohup.out
 thresher.pdf
+nonnegative.pdf
 build
 docs
