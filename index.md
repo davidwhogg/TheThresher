@@ -1,6 +1,6 @@
 ---
 layout: default
-sections: ["Authors", "License", "Contributors", "Notes", "Usage"]
+sections: ["Authors", "License", "Contributors", "Notes", "Installation", "Usage"]
 ---
 
 Luck isn't a factor when you're using **The Thresher**.
@@ -49,6 +49,10 @@ For generalizations to multi-band or multi-instrument imaging, or
 generalizations to time-variable scenes, watch this space.  For
 generalizations that permit sampling the posterior PDF in scene space,
 or full marginalization over PSF choices, don't hold your breath.
+
+### Installation
+
+*Watch this space.*
 
 ### Usage
 
