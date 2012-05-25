@@ -261,7 +261,7 @@ class Scene(object):
 
                     # On the first pass on the first image, normalize so that
                     # the PSF sums to ~1.
-                    if self.img_number == 0:
+                    if self.img_number == 0 and self.pass_number == 0:
                         self._infer_psf(data)
 
                         # Properly normalize the PSF.
