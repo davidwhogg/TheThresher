@@ -2,7 +2,8 @@
 
 % to-do
 % -----
-% - do work
+% - figure out what to do
+% - do it
 % - write first draft
 % - make and insert figures
 
@@ -37,7 +38,27 @@
   correspondence should be addressed: \texttt{david.hogg@nyu.edu}}
 
 \begin{abstract}
-Non-negative helps with x and y.  It hurts with w and z.
+Many processes in astronomy can be thought of as non-negative
+superpositions of non-negative components (think, for example, of
+stars and sky foreground summing to make a telescope image of a
+galaxy).  Inference of astrophysical phenomena can often therefore be
+performed with non-negative priors or priors that rule out all
+negative numbers in superpositions.  In, for example, a data-driven
+model of a spectrum with 2000 pixels, the non-negative prior cuts out
+all but $2^{-2000}$ of the \foreign{a priori} parameter space, so it
+is extremely informative and helpful for inference.  At the same time,
+non-negative priors ensure that uncertainties or noise---in the inputs
+or the outputs of the inference---cannot be Gaussian, so they
+explicitly invalidate chi-squared fitting or any other simple Gaussian
+approaches, including all the standard methods by which photometry
+(brightness measurement) is performed in imaging.  We give simple
+examples in which non-negative priors are clearly justified but lead
+to strongly biased point estimates.  These problems can all be
+overcome in fully probabilistic approaches to data analysis, but these
+involve passing forward probability distributions for everything in
+every stage of data analysis.  There are currently no practical
+proposals for performing these kinds of analyses for typical
+astrophysical data sets.
 \end{abstract}
 
 \begin{document}
