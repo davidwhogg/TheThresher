@@ -144,6 +144,7 @@ class Scene(object):
         self.outdir = os.path.abspath(outdir)
         self.psf_hw = psf_hw
         self.sky = sky
+        self.inferred_sky = 0
 
         self.img_number = 0
         self.pass_number = 0
@@ -302,8 +303,6 @@ class Scene(object):
         self.scene = (1 - alpha) * self.scene \
                                 + alpha * self.this_scene
 
-        self.scene -= np.median(self.scene)  # Crazy hack!
-
         if nn:
             self.scene[self.scene < 0] = 0.0
 
@@ -341,6 +340,9 @@ class Scene(object):
         # Infer the new PSF.
         new_psf, rnorm = op.nnls(scene_matrix, data_vector)
 
+        # Save the inferred sky level.
+        self.inferred_sky = new_psf[-1]
+
         # Do the index gymnastics to get the correct inferred PSF.
         # NOTE: here, we're first dropping the sky and then reversing the
         # PSF object because of the way that the `convolve` function is
@@ -369,6 +371,7 @@ class Scene(object):
         results = lsqr(psf_matrix, data_vector)
 
         new_scene = results[0].reshape(self.scene.shape)
+        new_scene -= np.median(new_scene)  # Crazy hack!
 
         return new_scene
 
@@ -386,6 +389,7 @@ class Scene(object):
         hdus[0].header.update("size", self.size)
         hdus[0].header.update("pass", self.pass_number)
         hdus[0].header.update("image", self.img_number)
+        hdus[0].header.update("sky", self.inferred_sky)
         hdus[1].header.update("status", "old")
         hdus[2].header.update("status", "new")
 
