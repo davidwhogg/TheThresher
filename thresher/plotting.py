@@ -47,7 +47,7 @@ def plot_image(ax, img, size=None, vrange=None):
 
 
 def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
-        meta=[]):
+        meta=[], sky=0.0):
     """
     Plot the images produced by a single update step.
 
@@ -93,7 +93,7 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
     scene_range = np.array([-10, 20]) * sigma
 
     # Set up which data will go in which panel.
-    predicted = convolve(this_scene, dpsf, mode="valid")
+    predicted = convolve(this_scene, dpsf, mode="valid") + sky
     delta = data - predicted
     psf = convolve(dpsf, kernel, mode="same")
     norm = np.sum(dpsf)
@@ -102,7 +102,7 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
                ("This Scene", this_scene, np.median(this_scene) + scene_range),
                ("This Scene", this_scene, np.median(this_scene) + 0.1 * scene_range)],
               [("dPSF", dpsf),
-               (r"dPSF $\ast$ This Scene", predicted, np.median(predicted) + scene_range * norm),
+               (r"Predicted Data", predicted, np.median(data) + scene_range * norm),
                ("New Scene", new_scene, np.median(new_scene) + scene_range),
                ("New Scene", new_scene, np.median(new_scene) + 0.1 * scene_range)],
               [("", None),
@@ -131,10 +131,16 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
             # Put some stats in this axis.
             line_height = 0.13
             txt = meta
+            txt.append("Sky: {0:0.4f}".format(sky))
             txt.append(r"$\sum \mathrm{{dPSF}} = {0:.4f}$"
                     .format(norm))
             txt.append(r"$\sum \mathrm{{PSF}} = {0:.4f}$"
                     .format(np.sum(psf)))
+            txt.append("median(Data) = {0:.4f}".format(np.median(data)))
+            txt.append("median(This Scene) = {0:.4f}"
+                    .format(np.median(this_scene)))
+            txt.append("median(New Scene) = {0:.4f}"
+                    .format(np.median(new_scene)))
 
             for i in range(len(txt)):
                 ax.text(0, 1 - i * line_height, txt[i], ha="left", va="top",
