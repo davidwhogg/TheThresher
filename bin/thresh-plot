@@ -41,8 +41,12 @@ def plot_state(fn, outdir):
     kernel = np.array(hdus[4].data, dtype=float)
     hdus.close()
 
+    meta = ["Image {0:d}".format(hdus[0].header.get("image")),
+            os.path.split(hdus[0].header.get("datafn"))[-1],
+            "Sky: {0:0.4f}".format(hdus[0].header.get("sky"))]
+
     thresher.plot_inference_step(_fig, data, this_scene, new_scene, psf,
-            kernel, meta=["Image {0:d}".format(hdus[0].header.get("image"))])
+            kernel, meta=meta)
 
     imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
             + ".png")
