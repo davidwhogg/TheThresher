@@ -20,8 +20,7 @@
 \newcommand{\given}{\,|\,}
 \newcommand{\transpose}[1]{{#1}^{\mathsf{T}}}
 
-\title{Non-negative priors or regularizations:
-  Costs and benefits for astronomers}
+\title{Non-negative priors or regularizations: Costs and benefits}
 \author{
   David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA},\ref{email}}
   and others
@@ -63,7 +62,31 @@ astrophysical data sets.
 
 \begin{document}
 
-\textbf{[This document is a very early draft dated 2012-05-25.  Please do not cite it without the permission of the authors.]}
+\noindent\textbf{[This document is a very early draft
+    dated 2012-05-25.  Please do not cite it
+    without the permission of the authors.]}
+
+Fake data:
+
+A set of N noisy images with different sky levels and PSFs.  Each
+image has two stars, one bright and one faint.
+
+Experiments:
+
+Estimate sky + scene for each image, with and without non-negative.
+Biases?
+
+Estimate PSF in each image, with and without non-negative.  Biases?
+
+Find scene + sky levels that explain all N images, with and without
+non-negative, with and without band limited.  Do with the correct true
+PSF.
+
+Do again with the estimated NN PSF.  Even more bias?
+
+Repeat the scene and sky estimation and PSF estimation with posterior
+PDF sampling.  What problems does this solve?  What problems does this
+introduce?
 
 \acknowledgements It is a pleasure to thank
   Mike Blanton (NYU),
