@@ -6,6 +6,8 @@ This file is part of The Thresher.
 import os
 import sys
 import logging
+import numpy as np
+import pyfits
 
 # This heinous hack let's me run this script without actually installing the
 # `thresher` module. I learned this from Steve Losh at:
@@ -24,16 +26,22 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("basepath", type=str,
             help="The root directory for the imaging data")
+    parser.add_argument("size", type=int,
+            help="The size of the co-added scene.")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The output file.")
+    parser.add_argument("-t", "--top", type=int, default=None,
+            help="Co-add the top N images")
     parser.add_argument("--log", type=str, default=None,
             help="The filename for the log.")
     parser.add_argument("-v", "--verbose", action="store_true",
             help="Enable verbose logging.")
     args = parser.parse_args()
 
+    assert args.size % 2 == 0, "The scene size must be even"
+
     if args.output is None:
-        outfn = os.path.join(args.basepath, "lucky-trad.dat")
+        outfn = os.path.join(args.basepath, "lucky-trad.fits")
     else:
         outfn = args.output
 
@@ -49,18 +57,43 @@ if __name__ == '__main__':
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
     # Run the pipeline.
-    scene = thresher.Scene(args.basepath)
+    scene = thresher.Scene(args.basepath, size=args.size)
+    Ndata = len([f for f in scene.image_list])
+
+    data = np.empty((Ndata, args.size, args.size))
 
     results = {}
-    for fn in scene.image_list:
+    for n, fn in enumerate(scene.image_list):
         image = thresher.load_image(fn)
-        data = float(thresher.centroid_image(image, scene.scene, 1))
+        result = thresher.centroid_image(image, scene.scene, args.size)
+
+        data[n] = result
 
         k = os.path.split(fn)[-1]
-        results[k] = data
+        results[k] = (n, float(result[args.size / 2, args.size / 2]))
 
-    f = open(outfn, "w")
-    for k in sorted(results, key=lambda k: results[k])[::-1]:
-        f.write("{0:10.4f} {1:s}\n".format(results[k], k))
+    ranked = sorted(results, key=lambda k: results[k][-1])[::-1]
 
-    f.close()
+    # Write the traditional lucky ranking to a file.
+    fns, ranks = [], []
+    for k in ranked:
+        fns.append(k)
+        ranks.append(results[k][-1])
+    col1 = pyfits.Column(name="filename", format="30A", array=np.array(fns))
+    col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
+    cols = pyfits.ColDefs([col1, col2])
+    table_hdu = pyfits.new_table(cols)
+
+    # Do the co-add.
+    if args.top is None:
+        top = len(ranked)
+    else:
+        top = int(args.top)
+
+    final = np.zeros((args.size, args.size))
+    for k in ranked[:top]:
+        final += data[results[k][0]] / float(top)
+    image_hdu = pyfits.PrimaryHDU(final)
+    image_hdu.header.update("number", top)
+
+    pyfits.HDUList([image_hdu, table_hdu]).writeto(outfn, clobber=True)
