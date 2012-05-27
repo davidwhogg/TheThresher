@@ -31,6 +31,10 @@ license.
 - **Dustin Lang**, Princeton University Observatory
 - **Phil Marshall**, Oxford University
 
+Partial financial support was provided by the
+**National Science Foundation** and the
+**National Aeronautics and Space Administration**.
+
 ### Notes
 
 **The Thresher** is based on a mash-up of
