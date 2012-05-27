@@ -7,7 +7,7 @@ import os
 import sys
 import logging
 import numpy as np
-import matplotlib.pyplot as pl
+import pyfits
 
 # This heinous hack let's me run this script without actually installing the
 # `thresher` module. I learned this from Steve Losh at:
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     assert args.size % 2 == 0, "The scene size must be even"
 
     if args.output is None:
-        outfn = os.path.join(args.basepath, "lucky-trad.dat")
+        outfn = os.path.join(args.basepath, "lucky-trad.fits")
     else:
         outfn = args.output
 
@@ -74,13 +74,17 @@ if __name__ == '__main__':
 
     ranked = sorted(results, key=lambda k: results[k][-1])[::-1]
 
-    # # Write the traditional lucky ranking to a file.
-    # f = open(outfn, "w")
-    # for k in ranked:
-    #     f.write("{0:10.4f} {1:s}\n".format(results[k], k))
-    # f.close()
+    # Write the traditional lucky ranking to a file.
+    fns, ranks = [], []
+    for k in ranked:
+        fns.append(k)
+        ranks.append(results[k][-1])
+    col1 = pyfits.Column(name="filename", format="30A", array=np.array(fns))
+    col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
+    cols = pyfits.ColDefs([col1, col2])
+    table_hdu = pyfits.new_table(cols)
 
-    # Run the co-add.
+    # Do the co-add.
     if args.top is None:
         top = len(ranked)
     else:
@@ -89,7 +93,7 @@ if __name__ == '__main__':
     final = np.zeros((args.size, args.size))
     for k in ranked[:top]:
         final += data[results[k][0]] / float(top)
+    image_hdu = pyfits.PrimaryHDU(final)
+    image_hdu.header.update("number", top)
 
-    pl.clf()
-    pl.imshow(final, interpolation="nearest")
-    pl.savefig("testing.png")
+    pyfits.HDUList([image_hdu, table_hdu]).writeto(outfn, clobber=True)
