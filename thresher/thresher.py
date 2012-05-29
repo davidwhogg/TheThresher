@@ -219,7 +219,7 @@ class Scene(object):
                 data
 
     def run_inference(self, basepath=None, npasses=5, current_pass=0,
-            current_img=None, do_centroiding=True):
+            current_img=None, do_centroiding=True, subtract_median=False):
         """
         Run the full inference on the dataset.
 
@@ -274,6 +274,10 @@ class Scene(object):
 
                     # Do the inference.
                     self._inference_step(data, alpha, nn)
+
+                    # Subtract the median.
+                    if subtract_median:
+                        self.scene -= np.median(self.scene)
 
                     # Save the output.
                     self._save_state(data)
@@ -371,7 +375,6 @@ class Scene(object):
         results = lsqr(psf_matrix, data_vector)
 
         new_scene = results[0].reshape(self.scene.shape)
-        new_scene -= np.median(new_scene)  # Crazy hack!
 
         return new_scene
 
