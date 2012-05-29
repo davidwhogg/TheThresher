@@ -41,7 +41,7 @@ def plot_state(fn, outdir):
         psf = np.array(hdus[3].data, dtype=float)
         kernel = np.array(hdus[4].data, dtype=float)
         hdus.close()
-    except ValueError:
+    except ValueError, IndexError:
         # The file is still being written... this only seems to matter on
         # broiler.
         return
