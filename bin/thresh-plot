@@ -41,9 +41,11 @@ def plot_state(fn, outdir):
         psf = np.array(hdus[3].data, dtype=float)
         kernel = np.array(hdus[4].data, dtype=float)
         hdus.close()
-    except ValueError, IndexError:
+    except ValueError:
         # The file is still being written... this only seems to matter on
         # broiler.
+        return
+    except IndexError:
         return
 
     meta = ["Image {0:d}".format(hdus[0].header.get("image")),
