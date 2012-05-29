@@ -85,6 +85,11 @@ if __name__ == '__main__':
         outdir = args.output
 
     try:
+        os.makedirs(args.basepath)
+    except os.error:
+        pass
+
+    try:
         os.makedirs(outdir)
     except os.error:
         pass
