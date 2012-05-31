@@ -41,7 +41,7 @@ if __name__ == '__main__':
     assert args.size % 2 == 0, "The scene size must be even"
 
     if args.output is None:
-        outfn = os.path.join(args.basepath, "lucky-trad.fits")
+        outfn = "lucky-trad.fits"
     else:
         outfn = args.output
 
