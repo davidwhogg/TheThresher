@@ -134,6 +134,13 @@ def trim_image(image, size):
     return image[xmin:xmin + size, ymin:ymin + size]
 
 
+def _worker(scene, data):
+    # Do the inference.
+    psf = scene._infer_psf(data)
+    new_scene = scene._infer_scene(data)
+    return psf, new_scene
+
+
 class Scene(object):
     """
     A `Scene` object describes and learns the "true" image from a lucky
@@ -312,7 +319,7 @@ class Scene(object):
                     # On the first pass on the first image, normalize so that
                     # the PSF sums to ~1.
                     if self.img_number == 0 and self.pass_number == 0:
-                        self._infer_psf(data)
+                        self.psf = self._infer_psf(data)
 
                         # Properly normalize the PSF.
                         norm = np.sum(self.psf)
@@ -324,7 +331,13 @@ class Scene(object):
                             self.scene -= np.median(self.scene)
 
                     # Do the inference.
-                    self._inference_step(data, alpha, nn)
+                    self.old_scene = np.array(self.scene)
+                    self.psf, self.this_scene = _worker(self, data)
+                    self.scene = (1 - alpha) * self.scene \
+                                            + alpha * self.this_scene
+                    if nn:
+                        self.scene[self.scene < 0] = 0.0
+                    gc.collect()
 
                     # Subtract the median.
                     if subtract_median:
@@ -337,31 +350,6 @@ class Scene(object):
             # of the zeroth image is reset. We only want to start from this
             # image on the first pass through the data when we're restarting.
             current_img = 0
-
-    def _inference_step(self, data, alpha, nn):
-        """
-        Concatenation of `_infer_psf()` and `_infer_scene()`.  Applies
-        `alpha` times the newly inferred scene to `(1. - alpha)` times the
-        old scene.
-
-        ## Arguments
-
-        * `data` (numpy.ndarray): The new image.
-        * `alpha` (float): The weight of the new scene.
-        * `nn` (bool): Should the update enforce non-negativity?
-
-        """
-        assert 0 < alpha <= 1
-        self._infer_psf(data)
-        self.old_scene = np.array(self.scene)
-        self.this_scene = self._infer_scene(data)
-        self.scene = (1 - alpha) * self.scene \
-                                + alpha * self.this_scene
-
-        if nn:
-            self.scene[self.scene < 0] = 0.0
-
-        gc.collect()
 
     @dfm_time
     def _infer_psf(self, data, useL2=False):
@@ -403,7 +391,7 @@ class Scene(object):
         # NOTE: here, we're first dropping the sky and then reversing the
         # PSF object because of the way that the `convolve` function is
         # defined.
-        self.psf = new_psf[:-1][::-1].reshape((P, P))
+        return new_psf[:-1][::-1].reshape((P, P))
 
     @dfm_time
     def _infer_scene(self, data):
