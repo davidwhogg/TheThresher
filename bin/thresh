@@ -34,6 +34,8 @@ if __name__ == '__main__':
             help="Initialize the scene using the first data point?")
     parser.add_argument("--tli", action="store_true",
             help="Sort the images using TLI?")
+    parser.add_argument("-m", "--median", action="store_true",
+            help="Subtract the median of the scene?")
     parser.add_argument("--centroid", action="store_true",
             help="Should we centroid each new data point?")
     parser.add_argument("--size", type=int, default=None,
@@ -84,4 +86,5 @@ if __name__ == '__main__':
     if args.init_data:
         scene.initialize_with_data()
 
-    scene.run_inference(npasses=args.npasses, do_centroiding=args.centroid)
+    scene.run_inference(npasses=args.npasses, do_centroiding=args.centroid,
+            subtract_median=args.median)

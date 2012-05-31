@@ -33,13 +33,20 @@ _fig = pl.figure(figsize=(16, 12))
 
 
 def plot_state(fn, outdir):
-    hdus = pyfits.open(fn)
-    data = np.array(hdus[0].data, dtype=float)
-    this_scene = np.array(hdus[1].data, dtype=float)
-    new_scene = np.array(hdus[2].data, dtype=float)
-    psf = np.array(hdus[3].data, dtype=float)
-    kernel = np.array(hdus[4].data, dtype=float)
-    hdus.close()
+    try:
+        hdus = pyfits.open(fn)
+        data = np.array(hdus[0].data, dtype=float)
+        this_scene = np.array(hdus[1].data, dtype=float)
+        new_scene = np.array(hdus[2].data, dtype=float)
+        psf = np.array(hdus[3].data, dtype=float)
+        kernel = np.array(hdus[4].data, dtype=float)
+        hdus.close()
+    except ValueError:
+        # The file is still being written... this only seems to matter on
+        # broiler.
+        return
+    except IndexError:
+        return
 
     meta = ["Image {0:d}".format(hdus[0].header.get("image")),
             os.path.split(hdus[0].header.get("datafn"))[-1],
@@ -83,6 +90,11 @@ if __name__ == '__main__':
         outdir = bp
     else:
         outdir = args.output
+
+    try:
+        os.makedirs(args.basepath)
+    except os.error:
+        pass
 
     try:
         os.makedirs(outdir)
