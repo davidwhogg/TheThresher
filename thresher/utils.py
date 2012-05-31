@@ -1,5 +1,7 @@
-__all__ = ["s2n", "resolution"]
+__all__ = ["s2n", "resolution", "dfm_time"]
 
+import time
+import logging
 import numpy as np
 
 
@@ -49,11 +51,33 @@ def s2n(img, pos, diam=5, nnoise=100):
             r = np.sqrt((pos[0] - p0[0]) ** 2 + (pos[1] - p0[1]) ** 2)
         ncounts[i] = _measure_counts(img, p0, diam) - median
 
-    return s_counts / np.sqrt(np.mean(ncounts ** 2))
+    return s_counts / np.sqrt(np.var(ncounts))
 
 
 def resolution():
     pass
+
+
+def dfm_time(f, lf=None):
+    """
+    A decorator used for some simple profiling.
+
+    # Keyword Arguments
+
+    * `lf` (callable): The logging function to use.
+
+    """
+    if lf is None:
+        lf = logging.info
+
+    def _func(*args, **kwargs):
+        t = time.time()
+        r = f(*args, **kwargs)
+        dt = time.time() - t
+        txt = "{0} took {1} seconds".format(f.__name__, dt)
+        lf(txt)
+        return r
+    return _func
 
 
 if __name__ == "__main__":
