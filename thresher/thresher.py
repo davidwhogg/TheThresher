@@ -18,6 +18,8 @@ import scipy.optimize as op
 
 import pyfits
 
+from utils import dfm_time
+
 
 def xy2index(shape, x, y):
     """
@@ -194,6 +196,49 @@ class Scene(object):
         self.psf_rows, self.psf_cols = \
                 unravel_psf(len(self.scene), self.psf_hw)
 
+    def run_lucky(self, do_coadd=True, top=None):
+        """
+        Run traditional lucky imaging on a stream of data.
+
+        ## Keyword Arguments
+
+        * `do_coadd` (bool): Return the coadded image?
+        * `top` (int): How many images should be coadded.
+
+        """
+        Ndata = len([f for f in self.image_list])
+
+        data = np.empty((Ndata, self.size, self.size))
+
+        results = {}
+        for n, fn in enumerate(self.image_list):
+            image = load_image(fn)
+            result = centroid_image(image, self.scene, self.size)
+
+            data[n] = result
+
+            k = os.path.split(fn)[-1]
+            results[k] = (n, float(result[self.size / 2, self.size / 2]))
+
+        # Sort by brightest centroided pixel.
+        ranked = sorted(results, key=lambda k: results[k][-1])[::-1]
+        fns, ranks = [], []
+        for k in ranked:
+            fns.append(k)
+            ranks.append(results[k][-1])
+
+        if not do_coadd:
+            return fns, ranks
+
+        # Do the co-add.
+        if top is None:
+            top = len(ranked)
+        final = np.zeros((self.size, self.size))
+        for k in ranked[:top]:
+            final += data[results[k][0]] / float(top)
+
+        return fns, ranks, final
+
     @property
     def image_list(self):
         entries = os.listdir(self.basepath)
@@ -308,6 +353,7 @@ class Scene(object):
 
         gc.collect()
 
+    @dfm_time
     def _infer_psf(self, data, useL2=False):
         """
         Take data and a current belief about the scene; infer the psf for
@@ -349,6 +395,7 @@ class Scene(object):
         # defined.
         self.psf = new_psf[:-1][::-1].reshape((P, P))
 
+    @dfm_time
     def _infer_scene(self, data):
         """
         Take data and a current belief about the PSF; infer the scene for

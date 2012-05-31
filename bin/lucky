@@ -58,42 +58,14 @@ if __name__ == '__main__':
 
     # Run the pipeline.
     scene = thresher.Scene(args.basepath, size=args.size)
-    Ndata = len([f for f in scene.image_list])
+    fns, ranks, final = scene.run_lucky(do_coadd=True, top=args.top)
 
-    data = np.empty((Ndata, args.size, args.size))
-
-    results = {}
-    for n, fn in enumerate(scene.image_list):
-        image = thresher.load_image(fn)
-        result = thresher.centroid_image(image, scene.scene, args.size)
-
-        data[n] = result
-
-        k = os.path.split(fn)[-1]
-        results[k] = (n, float(result[args.size / 2, args.size / 2]))
-
-    ranked = sorted(results, key=lambda k: results[k][-1])[::-1]
-
-    # Write the traditional lucky ranking to a file.
-    fns, ranks = [], []
-    for k in ranked:
-        fns.append(k)
-        ranks.append(results[k][-1])
     col1 = pyfits.Column(name="filename", format="30A", array=np.array(fns))
     col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
     cols = pyfits.ColDefs([col1, col2])
     table_hdu = pyfits.new_table(cols)
-
-    # Do the co-add.
-    if args.top is None:
-        top = len(ranked)
-    else:
-        top = int(args.top)
-
-    final = np.zeros((args.size, args.size))
-    for k in ranked[:top]:
-        final += data[results[k][0]] / float(top)
     image_hdu = pyfits.PrimaryHDU(final)
-    image_hdu.header.update("number", top)
+    if args.top is not None:
+        image_hdu.header.update("number", args.top)
 
     pyfits.HDUList([image_hdu, table_hdu]).writeto(outfn, clobber=True)
