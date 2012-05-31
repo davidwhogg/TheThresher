@@ -116,8 +116,8 @@ def centroid_image(image, scene, size):
     ip0, ip1 = np.sum(image, axis=0), np.sum(image, axis=1)
     sp0, sp1 = np.sum(scene, axis=0), np.sum(scene, axis=1)
 
-    y0 = np.argmax(convolve(ip0, sp0, mode="valid"))
-    x0 = np.argmax(convolve(ip1, sp1, mode="valid"))
+    y0 = np.argmax(convolve(ip0[::-1], sp0, mode="valid"))
+    x0 = np.argmax(convolve(ip1[::-1], sp1, mode="valid"))
 
     xmin = int(x0 + 0.5 * (scene.shape[0] - size))
     ymin = int(y0 + 0.5 * (scene.shape[1] - size))
