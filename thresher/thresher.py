@@ -320,6 +320,8 @@ class Scene(object):
 
                         # Re-infer the scene.
                         self.scene = self._infer_scene(data)
+                        if subtract_median:
+                            self.scene -= np.median(self.scene)
 
                     # Do the inference.
                     self._inference_step(data, alpha, nn)
