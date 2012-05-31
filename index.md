@@ -64,7 +64,7 @@ The data should be in a set of `FITS` files in a directory somewhere.
 To run the pipeline on this directory, run `bin/thresh` as follows:
 
 ```
-bin/thresh /path/to/your/data -o /path/to/outputs --size 64
+bin/thresh '/path/to/data/*.fits' -o /directory/for/output --size 64
 ```
 
 You can run `bin/thresh -h` for more command line options.
@@ -80,4 +80,11 @@ To generate all of the plots for an existing run, use:
 
 ```
 bin/thresh-plot /path/to/outputs -o /path/to/plots
+```
+
+You can also run TLI (traditional lucky imaging) on the same data as
+follows:
+
+```
+bin/tli '/path/to/data/*.fits' 64 -o tli.fits
 ```
