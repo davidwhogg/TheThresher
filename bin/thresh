@@ -26,12 +26,14 @@ if __name__ == '__main__':
     # Start by parsing the command line arguments.
     desc = "Run online blind de-mixing on a lucky imaging data stream."
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument("basepath", type=str,
-            help="The root directory for the imaging data")
+    parser.add_argument("glob", type=str,
+            help="The glob that the images must satisfy")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The directory for the output files.")
     parser.add_argument("-i", "--init_data", action="store_true",
             help="Initialize the scene using the first data point?")
+    parser.add_argument("--tli", action="store_true",
+            help="Sort the images using TLI?")
     parser.add_argument("--centroid", action="store_true",
             help="Should we centroid each new data point?")
     parser.add_argument("--size", type=int, default=None,
@@ -53,7 +55,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.output is None:
-        outdir = os.path.join(args.basepath, "out")
+        outdir = os.path.join(os.getcwd(), "out")
     else:
         outdir = args.output
 
@@ -74,9 +76,9 @@ if __name__ == '__main__':
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
     # Start the inference.
-    scene = thresher.Scene(args.basepath, outdir, psf_hw=args.psf_hw,
+    scene = thresher.Scene(args.glob, outdir, psf_hw=args.psf_hw,
             size=args.size, sky=args.sky, psfreg=args.psfreg,
-            sceneL2=args.sceneL2)
+            sceneL2=args.sceneL2, sort_by_tli=args.tli)
 
     # Initialize with the data.
     if args.init_data:

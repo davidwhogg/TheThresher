@@ -24,8 +24,8 @@ if __name__ == '__main__':
     # Start by parsing the command line arguments.
     desc = "Run traditional lucky imaging."
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument("basepath", type=str,
-            help="The root directory for the imaging data")
+    parser.add_argument("glob", type=str,
+            help="The glob that the imaging data should satisfy")
     parser.add_argument("size", type=int,
             help="The size of the co-added scene.")
     parser.add_argument("-o", "--output", type=str, default=None,
@@ -57,8 +57,9 @@ if __name__ == '__main__':
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
     # Run the pipeline.
-    scene = thresher.Scene(args.basepath, size=args.size)
+    scene = thresher.Scene(args.glob, size=args.size)
     fns, ranks, final = scene.run_lucky(do_coadd=True, top=args.top)
+    fns = [os.path.split(fn)[-1] for fn in fns]
 
     col1 = pyfits.Column(name="filename", format="30A", array=np.array(fns))
     col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))

@@ -8,6 +8,7 @@ __all__ = ["Scene", "load_image", "centroid_image"]
 import os
 import logging
 import gc
+import glob
 
 import numpy as np
 
@@ -139,10 +140,11 @@ class Scene(object):
     imaging data stream.
 
     """
-    def __init__(self, basepath=".", outdir="", psf_hw=13, size=None, sky=0.,
-            initial_scene=None, kernel=None, psfreg=100., sceneL2=1. / 64.):
+    def __init__(self, imgglob, outdir="", psf_hw=13, size=None, sky=0.,
+            initial_scene=None, kernel=None, psfreg=100., sceneL2=1. / 64.,
+            sort_by_tli=False):
         # All the metadata.
-        self.basepath = os.path.abspath(basepath)
+        self.glob = imgglob
         self.outdir = os.path.abspath(outdir)
         self.psf_hw = psf_hw
         self.sky = sky
@@ -150,6 +152,12 @@ class Scene(object):
 
         self.img_number = 0
         self.pass_number = 0
+
+        # Get the image list.
+        entries = glob.glob(self.glob)
+        self.image_list = [os.path.abspath(e) for e in sorted(entries)]
+        assert len(self.image_list) > 0, \
+                "There are no files matching '{0}'".format(imgglob)
 
         # Set the scene size.
         image = self.first_image
@@ -196,6 +204,10 @@ class Scene(object):
         self.psf_rows, self.psf_cols = \
                 unravel_psf(len(self.scene), self.psf_hw)
 
+        # Sort by TLI if requested.
+        if sort_by_tli:
+            self.image_list, ranks = self.run_lucky(do_coadd=False)
+
     def run_lucky(self, do_coadd=True, top=None):
         """
         Run traditional lucky imaging on a stream of data.
@@ -217,8 +229,7 @@ class Scene(object):
 
             data[n] = result
 
-            k = os.path.split(fn)[-1]
-            results[k] = (n, float(result[self.size / 2, self.size / 2]))
+            results[fn] = (n, float(result[self.size / 2, self.size / 2]))
 
         # Sort by brightest centroided pixel.
         ranked = sorted(results, key=lambda k: results[k][-1])[::-1]
@@ -240,16 +251,9 @@ class Scene(object):
         return fns, ranks, final
 
     @property
-    def image_list(self):
-        entries = os.listdir(self.basepath)
-        for e in sorted(entries):
-            if os.path.splitext(e)[1] == ".fits":
-                yield os.path.join(self.basepath, e)
-
-    @property
     def first_image(self):
         """Get the data for the first image"""
-        return load_image(self.image_list.next())
+        return load_image(self.image_list[0])
 
     def initialize_with_data(self):
         """
