@@ -33,6 +33,9 @@ def plot_image(ax, img, size=None, vrange=None):
     else:
         vmin, vmax = vrange
 
+    if size is None:
+        size = np.mean(img.shape)
+
     # Invert the image.
     vmin, vmax = -vmax, -vmin
 
@@ -44,6 +47,23 @@ def plot_image(ax, img, size=None, vrange=None):
     ymin, ymax = (img.shape[1] - size) / 2, (img.shape[1] + size) / 2 - 1
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
+
+
+def estimate_sigma(scene):
+    # Let's estimate the variance of new_scene. Hack anyone?
+    nsigma = np.arange(1, 5)
+    fracs = 1 - 0.5 * (1 - erf(nsigma / np.sqrt(2)))
+    median = np.median(scene)
+
+    scene_sort = np.sort(scene.flatten())
+    mask = np.array(fracs * scene.size, dtype=int)
+    quantiles = scene_sort[mask]
+
+    sigmas = (quantiles - median) / nsigma
+    ind = np.arange(len(sigmas))[sigmas > 0][1]
+    sigma = sigmas[ind]
+
+    return sigma
 
 
 def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
@@ -75,21 +95,8 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
         axes[-1].set_xticklabels([])
         axes[-1].set_yticklabels([])
 
-    # Let's estimate the variance of new_scene. Hack anyone?
-    nsigma = np.arange(1, 5)
-    fracs = 1 - 0.5 * (1 - erf(nsigma / np.sqrt(2)))
-    median = np.median(new_scene)
-
-    scene_sort = np.sort(new_scene.flatten())
-    mask = np.array(fracs * new_scene.size, dtype=int)
-    quantiles = scene_sort[mask]
-
-    sigmas = (quantiles - median) / nsigma
-    ind = np.arange(len(sigmas))[sigmas > 0][1]
-    sigma = sigmas[ind]
-
-    print "Scene median and quantiles and index:", median, quantiles, mask
-
+    # Calculate stretch.
+    sigma = estimate_sigma(new_scene)
     scene_range = np.array([-10, 20]) * sigma
 
     # Set up which data will go in which panel.

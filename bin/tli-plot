@@ -1,0 +1,86 @@
+#!/usr/bin/env python
+"""
+This file is part of The Thresher.
+
+This script plots the results of a `thresher` run.  It can also monitor
+the output directory for real time plotting.
+
+"""
+
+import os
+import sys
+import logging
+
+import numpy as np
+import matplotlib.pyplot as pl
+import pyfits
+
+# This heinous hack let's me run this script without actually installing the
+# `thresher` module. I learned this from Steve Losh at:
+#     https://github.com/sjl/d/blob/master/bin/d
+try:
+    import thresher
+    thresher = thresher  # Stoopid Flakes8 errors.
+except ImportError:
+    sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+    import thresher
+
+from thresher.plotting import plot_image, estimate_sigma
+
+
+if __name__ == '__main__':
+    import argparse
+
+    # Start by parsing the command line arguments.
+    desc = "Plot the results of a TLI run."
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument("filename", type=str,
+            help="The FITS output from TLI.")
+    parser.add_argument("-o", "--output", type=str, default=None,
+            help="The filename for the output.")
+    args = parser.parse_args()
+
+    fn = os.path.abspath(args.filename)
+
+    if args.output is None:
+        outfn = ".".join([os.path.splitext(fn)[0], "png"])
+    else:
+        outfn = os.path.abspath(args.output)
+
+    try:
+        os.makedirs(os.path.split(outfn)[0])
+    except os.error:
+        pass
+
+    logging.basicConfig(level=logging.INFO)
+
+    # Read in the data.
+    hdus = pyfits.open(fn)
+    img = np.array(hdus[0].data, dtype=float)
+    top = int(hdus[0].header.get("number", -1))
+    hdus.close()
+
+    # Calculate sigma.
+    sigma = estimate_sigma(img)
+    median = np.median(img)
+    r = np.array([-2.5, 5]) * sigma
+    vrange = median + r
+    vrange_hard = median + 0.1 * r
+
+    # Set up figure.
+    fig = pl.figure(figsize=(16, 8))
+    ax1 = fig.add_subplot(121)
+    ax2 = fig.add_subplot(122)
+
+    # Do the plotting.
+    plot_image(ax1, img, vrange=vrange)
+    plot_image(ax2, img, vrange=vrange_hard)
+
+    # Bookkeeping.
+    if top > 0:
+        ax1.set_title("Top {0:d}".format(top))
+    else:
+        ax1.set_title("All")
+    ax2.set_title("Stretched")
+
+    pl.savefig(outfn)
