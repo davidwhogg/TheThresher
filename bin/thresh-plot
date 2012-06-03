@@ -54,13 +54,16 @@ def plot_state(fn, outdir):
             os.path.split(hdus[0].header.get("datafn"))[-1],
             ]
 
-    thresher.plot_inference_step(_fig, data, this_scene, new_scene, psf,
-            kernel, meta=meta, sky=float(hdus[0].header.get("sky")))
-
     imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
             + ".png")
-    logging.info("Saving figure to: {0}".format(imgfn))
-    pl.savefig(imgfn)
+
+    try:
+        thresher.plot_inference_step(_fig, data, this_scene, new_scene, psf,
+                kernel, meta=meta, sky=float(hdus[0].header.get("sky")))
+        logging.info("Saving figure to: {0}".format(imgfn))
+        pl.savefig(imgfn)
+    except ValueError:
+        logging.warn("Got a value error. Couldn't save {0}.".format(imgfn))
 
 
 class PlottingHandler(FileSystemEventHandler):
