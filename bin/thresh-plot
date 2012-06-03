@@ -47,6 +47,8 @@ def plot_state(fn, outdir):
         return
     except IndexError:
         return
+    except IOError:
+        return
 
     meta = ["Image {0:d}".format(hdus[0].header.get("image")),
             os.path.split(hdus[0].header.get("datafn"))[-1],
