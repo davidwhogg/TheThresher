@@ -24,9 +24,11 @@ from watchdog.events import FileSystemEventHandler
 #     https://github.com/sjl/d/blob/master/bin/d
 try:
     import thresher
+    thresher = thresher  # Flake8... don't ask...
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
     import thresher
+    thresher = thresher
 
 
 _fig = pl.figure(figsize=(16, 12))

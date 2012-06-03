@@ -17,9 +17,11 @@ import datetime
 #     https://github.com/sjl/d/blob/master/bin/d
 try:
     import thresher
+    thresher = thresher  # Flake8... don't ask...
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
     import thresher
+    thresher = thresher
 
 if __name__ == '__main__':
     import argparse
