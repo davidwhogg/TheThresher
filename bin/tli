@@ -47,7 +47,7 @@ if __name__ == '__main__':
     outfn = os.path.abspath(outfn)
 
     try:
-        os.makedirs(os.path.split(outfn)[:-1])
+        os.makedirs(os.path.split(outfn)[0])
     except os.error:
         pass
 
@@ -72,6 +72,7 @@ if __name__ == '__main__':
     cols = pyfits.ColDefs([col1, col2])
     table_hdu = pyfits.new_table(cols)
     image_hdu = pyfits.PrimaryHDU(final)
+    image_hdu.header.update("cli", " ".join(sys.argv))
     if args.top is not None:
         image_hdu.header.update("number", args.top)
 
