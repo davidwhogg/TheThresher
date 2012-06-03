@@ -44,6 +44,12 @@ if __name__ == '__main__':
         outfn = "lucky-trad.fits"
     else:
         outfn = args.output
+    outfn = os.path.abspath(outfn)
+
+    try:
+        os.makedirs(os.path.split(outfn)[:-1])
+    except os.error:
+        pass
 
     # Set up the `logging` module with the settings provided at the command
     # line.
