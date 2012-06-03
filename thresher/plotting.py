@@ -105,17 +105,17 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
     psf = convolve(dpsf, kernel, mode="same")
     norm = np.sum(dpsf)
     panels = [[("PSF", psf),
-               ("Data", data, np.median(data) + scene_range * norm),
-               ("This Scene", this_scene, np.median(this_scene) + scene_range),
-               ("This Scene", this_scene, np.median(this_scene) + 0.1 * scene_range)],
-              [("dPSF", dpsf),
-               (r"Predicted Data", predicted, np.median(data) + scene_range * norm),
-               ("New Scene", new_scene, np.median(new_scene) + scene_range),
-               ("New Scene", new_scene, np.median(new_scene) + 0.1 * scene_range)],
-              [("", None),
-               (r"Data - dPSF $\ast$ This Scene", delta, np.median(delta) + scene_range),
-               ("Update", new_scene - this_scene),
-               ("annotations", None)]]
+        ("Data", data, np.median(data) + scene_range * norm),
+        ("This Scene", this_scene, np.median(this_scene) + scene_range),
+        ("This Scene", this_scene, np.median(this_scene) + 0.1 * scene_range)],
+        [("dPSF", dpsf),
+        (r"Predicted Data", predicted, np.median(data) + scene_range * norm),
+        ("New Scene", new_scene, np.median(new_scene) + scene_range),
+        ("New Scene", new_scene, np.median(new_scene) + 0.1 * scene_range)],
+        [("", None),
+        (r"Data - Predicted", delta, np.median(delta) + scene_range),
+        ("Update", new_scene - this_scene),
+        ("annotations", None)]]
 
     # Do the plotting.
     size = data.shape[0]  # The size to pad/crop to.
