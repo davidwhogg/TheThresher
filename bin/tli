@@ -14,9 +14,11 @@ import pyfits
 #     https://github.com/sjl/d/blob/master/bin/d
 try:
     import thresher
+    thesher = thresher  # Y'know...
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
     import thresher
+    thresher = thresher  # N.B.D.
 
 if __name__ == '__main__':
     import argparse

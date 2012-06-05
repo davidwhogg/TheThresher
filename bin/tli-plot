@@ -24,6 +24,7 @@ try:
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
     import thresher
+    thresher = thresher  # You got it!
 
 from thresher.plotting import plot_image, estimate_sigma
 
