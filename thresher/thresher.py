@@ -198,6 +198,11 @@ class Scene(object):
         # Pad out the initial scene guess.
         self.scene = convolve(scene, self.psf, mode="full")
 
+        import matplotlib.pyplot as pl
+        pl.imshow(self.scene, interpolation="nearest", cmap="gray")
+        pl.savefig("blah.png")
+        assert 0
+
         if kernel is None:
             # Make the PSF convolution kernel here. There's a bit of black
             # MAGIC that could probably be fixed. The kernel is implicitly a

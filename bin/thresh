@@ -33,21 +33,19 @@ if __name__ == '__main__':
             help="The glob that the images must satisfy")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The directory for the output files.")
-    parser.add_argument("-i", "--init_data", action="store_true",
-            help="Initialize the scene using the first data point?")
     parser.add_argument("-m", "--median", action="store_true",
             help="Subtract the median of the scene?")
     parser.add_argument("--use_non_neg", action="store_true",
             help="Use non-negativity?")
-    parser.add_argument("--centroid", action="store_true",
+    parser.add_argument("--no_centroid", action="store_true",
             help="Should we centroid each new data point?")
     parser.add_argument("--size", type=int, default=None,
             help="The size of the inferred scene.")
     parser.add_argument("--psf_hw", type=int, default=13,
             help="The half width of the inferred PSF image.")
-    parser.add_argument("--psfreg", type=float, default=100.,
+    parser.add_argument("--psfreg", type=float, default=30.,
             help="The strength of the sum-to-one regularization on the PSF.")
-    parser.add_argument("--sceneL2", type=float, default=1. / 64.,
+    parser.add_argument("--sceneL2", type=float, default=0.01,
             help="The strength of the L2 regularization on the scene.")
     parser.add_argument("--sky", type=float, default=1.0,
             help="The sky level of the images")
@@ -92,9 +90,7 @@ if __name__ == '__main__':
             size=args.size, sky=args.sky, psfreg=args.psfreg,
             sceneL2=args.sceneL2)
 
-    # Initialize with the data.
-    if args.init_data:
-        scene.initialize_with_data()
-
-    scene.run_inference(npasses=args.npasses, do_centroiding=args.centroid,
-            subtract_median=args.median, use_nn=args.use_non_neg)
+    scene.run_inference(npasses=args.npasses,
+            do_centroiding=not args.no_centroid,
+            subtract_median=args.median,
+            use_nn=args.use_non_neg)
