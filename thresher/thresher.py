@@ -117,8 +117,8 @@ def centroid_image(image, scene, size, coords=None):
         ip0, ip1 = np.sum(image, axis=0), np.sum(image, axis=1)
         sp0, sp1 = np.sum(scene, axis=0), np.sum(scene, axis=1)
 
-        y0 = np.argmax(convolve(ip0[::-1], sp0, mode="valid"))
-        x0 = np.argmax(convolve(ip1[::-1], sp1, mode="valid"))
+        x0 = np.argmax(convolve(ip0[::-1], sp0, mode="valid"))
+        y0 = np.argmax(convolve(ip1[::-1], sp1, mode="valid"))
     else:
         x0, y0 = coords
 
@@ -196,12 +196,11 @@ class Scene(object):
         image_list, ranks, scene = self.run_lucky(top_percent=1)
 
         # Pad out the initial scene guess.
-        self.scene = convolve(scene, self.psf, mode="full")
+        self.scene = convolve(scene - np.median(scene), self.psf, mode="full")
 
         import matplotlib.pyplot as pl
         pl.imshow(self.scene, interpolation="nearest", cmap="gray")
         pl.savefig("blah.png")
-        assert 0
 
         if kernel is None:
             # Make the PSF convolution kernel here. There's a bit of black
@@ -246,7 +245,7 @@ class Scene(object):
             results[fn] = (n, float(result[self.size / 2, self.size / 2]))
 
         # Sort by brightest centroided pixel.
-        ranked = sorted(results, key=lambda k: results[k][-1])[::-1]
+        ranked = sorted(results, reverse=True, key=lambda k: results[k][-1])
         fns, ranks = [], []
         for k in ranked:
             fns.append(k)
@@ -260,8 +259,9 @@ class Scene(object):
             top = len(ranked)
         elif top_percent is not None:
             top = int(top_percent * 0.01 * len(ranked))
+
         final = np.zeros((self.size, self.size))
-        for k in ranked[:top]:
+        for i, k in enumerate(fns[:top]):
             final += data[results[k][0]] / float(top)
 
         return fns, ranks, final
