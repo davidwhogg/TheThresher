@@ -107,17 +107,20 @@ def load_image(fn):
     return data
 
 
-def centroid_image(image, scene, size):
+def centroid_image(image, scene, size, coords=None):
     """
     Centroid an image based on the current scene by projecting and
     convolving.
 
     """
-    ip0, ip1 = np.sum(image, axis=0), np.sum(image, axis=1)
-    sp0, sp1 = np.sum(scene, axis=0), np.sum(scene, axis=1)
+    if coords is None:
+        ip0, ip1 = np.sum(image, axis=0), np.sum(image, axis=1)
+        sp0, sp1 = np.sum(scene, axis=0), np.sum(scene, axis=1)
 
-    y0 = np.argmax(convolve(ip0[::-1], sp0, mode="valid"))
-    x0 = np.argmax(convolve(ip1[::-1], sp1, mode="valid"))
+        y0 = np.argmax(convolve(ip0[::-1], sp0, mode="valid"))
+        x0 = np.argmax(convolve(ip1[::-1], sp1, mode="valid"))
+    else:
+        x0, y0 = coords
 
     xmin = int(x0 + 0.5 * (scene.shape[0] - size))
     ymin = int(y0 + 0.5 * (scene.shape[1] - size))
@@ -125,7 +128,7 @@ def centroid_image(image, scene, size):
     logging.info("Got image center {0}, {1}"
             .format(xmin + 0.5 * size, ymin + 0.5 * size))
 
-    return image[xmin:xmin + size, ymin:ymin + size]
+    return (x0, y0), image[xmin:xmin + size, ymin:ymin + size]
 
 
 def trim_image(image, size):
@@ -148,8 +151,7 @@ class Scene(object):
 
     """
     def __init__(self, imgglob, outdir="", psf_hw=13, size=None, sky=0.,
-            initial_scene=None, kernel=None, psfreg=100., sceneL2=1. / 64.,
-            sort_by_tli=False):
+            kernel=None, psfreg=100., sceneL2=1. / 64.):
         # All the metadata.
         self.glob = imgglob
         self.outdir = os.path.abspath(outdir)
@@ -184,15 +186,17 @@ class Scene(object):
         self.psf = np.zeros((pd, pd))
         self.psf[psf_hw, psf_hw] = 1.
 
-        # If it's not provided, initialize the scene to something reasonable.
-        if initial_scene is None:
-            # Initialize the scene as a centered Gaussian.
-            x = np.linspace(-0.5 * self.size, 0.5 * self.size, self.size) ** 2
-            r = np.sqrt(x[:, None] + x[None, :])
-            self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
-            self.scene = convolve(self.scene, self.psf, mode="full")
-        else:
-            self.scene = np.array(initial_scene)
+        # Initialize the scene as a centered Gaussian.
+        x = np.linspace(-0.5 * self.size, 0.5 * self.size, self.size) ** 2
+        r = np.sqrt(x[:, None] + x[None, :])
+        self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
+        self.scene = convolve(self.scene, self.psf, mode="full")
+
+        # Run lucky imaging. MAGIC: co-add the top 1 percent.
+        image_list, ranks, scene = self.run_lucky(top_percent=1)
+
+        # Pad out the initial scene guess.
+        self.scene = convolve(scene, self.psf, mode="full")
 
         if kernel is None:
             # Make the PSF convolution kernel here. There's a bit of black
@@ -211,11 +215,7 @@ class Scene(object):
         self.psf_rows, self.psf_cols = \
                 unravel_psf(len(self.scene), self.psf_hw)
 
-        # Sort by TLI if requested.
-        if sort_by_tli:
-            self.image_list, ranks = self.run_lucky(do_coadd=False)
-
-    def run_lucky(self, do_coadd=True, top=None):
+    def run_lucky(self, do_coadd=True, top=None, top_percent=None):
         """
         Run traditional lucky imaging on a stream of data.
 
@@ -229,10 +229,12 @@ class Scene(object):
 
         data = np.empty((Ndata, self.size, self.size))
 
+        self.coords = {}
         results = {}
         for n, fn in enumerate(self.image_list):
             image = load_image(fn)
-            result = centroid_image(image, self.scene, self.size)
+            coords, result = centroid_image(image, self.scene, self.size)
+            self.coords[fn] = coords
 
             data[n] = result
 
@@ -249,8 +251,10 @@ class Scene(object):
             return fns, ranks
 
         # Do the co-add.
-        if top is None:
+        if top is None and top_percent is None:
             top = len(ranked)
+        elif top_percent is not None:
+            top = int(top_percent * 0.01 * len(ranked))
         final = np.zeros((self.size, self.size))
         for k in ranked[:top]:
             final += data[results[k][0]] / float(top)
@@ -268,14 +272,16 @@ class Scene(object):
         piece of data.
 
         """
-        image = self.first_image
-        data = trim_image(image, self.size) + self.sky
-        self.scene = np.zeros_like(self.scene)
-        self.scene[self.psf_hw:-self.psf_hw, self.psf_hw:-self.psf_hw] = \
-                data
+        pass
+        # image = self.first_image
+        # data = trim_image(image, self.size) + self.sky
+        # self.scene = np.zeros_like(self.scene)
+        # self.scene[self.psf_hw:-self.psf_hw, self.psf_hw:-self.psf_hw] = \
+        #         data
 
     def run_inference(self, basepath=None, npasses=5, current_pass=0,
-            current_img=None, do_centroiding=True, subtract_median=False):
+            current_img=None, do_centroiding=True, subtract_median=False,
+            use_nn=True):
         """
         Run the full inference on the dataset.
 
@@ -301,7 +307,9 @@ class Scene(object):
                 if self.img_number >= current_img:
                     image = load_image(self.fn)
                     if do_centroiding:
-                        data = centroid_image(image, self.scene, self.size)
+                        coords, data = \
+                                centroid_image(image, self.scene, self.size,
+                                        coords=self.coords[self.fn])
                     else:
                         data = trim_image(image, self.size)
 
@@ -311,7 +319,7 @@ class Scene(object):
                     # should use _non-negative_ optimization.
                     if self.pass_number == 0:
                         alpha = min(2. / (1 + self.img_number), 0.25)
-                        nn = True
+                        nn = use_nn  # True
                     else:
                         alpha = 2. / N  # MAGIC: 2.
                         nn = False
@@ -367,7 +375,7 @@ class Scene(object):
         data_size = D ** 2
 
         # Build scene matrix from kernel-convolved scene.
-        kc_scene = self.scene
+        kc_scene = convolve(self.kernel, self.scene, mode="same")
 
         scene_matrix = np.zeros((data_size + 1, psf_size + 1))
 
