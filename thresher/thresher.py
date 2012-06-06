@@ -117,8 +117,8 @@ def centroid_image(image, scene, size, coords=None):
         ip0, ip1 = np.sum(image, axis=0), np.sum(image, axis=1)
         sp0, sp1 = np.sum(scene, axis=0), np.sum(scene, axis=1)
 
-        y0 = np.argmax(convolve(ip0[::-1], sp0, mode="valid"))
-        x0 = np.argmax(convolve(ip1[::-1], sp1, mode="valid"))
+        x0 = np.argmax(convolve(ip0[::-1], sp0, mode="valid"))
+        y0 = np.argmax(convolve(ip1[::-1], sp1, mode="valid"))
     else:
         x0, y0 = coords
 
@@ -170,12 +170,9 @@ class Scene(object):
 
         # Set the scene size.
         image = self.first_image
-        if size is None:
-            self.size = min(image.shape)
-        else:
-            assert size <= min(image.shape), \
-                    "The scene size must be <= to the data size."
-            self.size = size
+        assert size <= min(image.shape), \
+                "The scene size must be <= to the data size."
+        self.size = size
 
         # L2 norm weights.
         self.psfreg = psfreg
@@ -186,6 +183,9 @@ class Scene(object):
         self.psf = np.zeros((pd, pd))
         self.psf[psf_hw, psf_hw] = 1.
 
+        # HACK
+        self.size += 2 * psf_hw
+
         # Initialize the scene as a centered Gaussian.
         x = np.linspace(-0.5 * self.size, 0.5 * self.size, self.size) ** 2
         r = np.sqrt(x[:, None] + x[None, :])
@@ -195,13 +195,14 @@ class Scene(object):
         # Run lucky imaging. MAGIC: co-add the top 1 percent.
         image_list, ranks, scene = self.run_lucky(top_percent=1)
 
-        # Pad out the initial scene guess.
-        self.scene = convolve(scene, self.psf, mode="full")
+        self.scene = scene - np.median(scene)
+
+        # HACK part 2.
+        self.size -= 2 * psf_hw
 
         import matplotlib.pyplot as pl
         pl.imshow(self.scene, interpolation="nearest", cmap="gray")
         pl.savefig("blah.png")
-        assert 0
 
         if kernel is None:
             # Make the PSF convolution kernel here. There's a bit of black
@@ -246,7 +247,7 @@ class Scene(object):
             results[fn] = (n, float(result[self.size / 2, self.size / 2]))
 
         # Sort by brightest centroided pixel.
-        ranked = sorted(results, key=lambda k: results[k][-1])[::-1]
+        ranked = sorted(results, reverse=True, key=lambda k: results[k][-1])
         fns, ranks = [], []
         for k in ranked:
             fns.append(k)
@@ -260,8 +261,9 @@ class Scene(object):
             top = len(ranked)
         elif top_percent is not None:
             top = int(top_percent * 0.01 * len(ranked))
+
         final = np.zeros((self.size, self.size))
-        for k in ranked[:top]:
+        for i, k in enumerate(fns[:top]):
             final += data[results[k][0]] / float(top)
 
         return fns, ranks, final
@@ -311,12 +313,9 @@ class Scene(object):
             for self.img_number, self.fn in enumerate(self.image_list):
                 if self.img_number >= current_img:
                     image = load_image(self.fn)
-                    if do_centroiding:
-                        coords, data = \
-                                centroid_image(image, self.scene, self.size,
-                                        coords=self.coords[self.fn])
-                    else:
-                        data = trim_image(image, self.size)
+                    coords, data = \
+                            centroid_image(image, self.scene, self.size,
+                                    coords=self.coords[self.fn])
 
                     data += self.sky - np.min(data)
 
@@ -329,20 +328,6 @@ class Scene(object):
                         alpha = 2. / N  # MAGIC: 2.
                         nn = False
 
-                    # On the first pass on the first image, normalize so that
-                    # the PSF sums to ~1.
-                    if self.img_number == 0 and self.pass_number == 0:
-                        self.psf = self._infer_psf(data)
-
-                        # Properly normalize the PSF.
-                        norm = np.sum(self.psf)
-                        self.psf /= norm
-
-                        # Re-infer the scene.
-                        self.scene = self._infer_scene(data)
-                        if subtract_median:
-                            self.scene -= np.median(self.scene)
-
                     # Do the inference.
                     self.old_scene = np.array(self.scene)
                     self.psf, self.this_scene = _worker(self, data)
@@ -350,6 +335,8 @@ class Scene(object):
                                             + alpha * self.this_scene
                     if nn:
                         self.scene[self.scene < 0] = 0.0
+
+                    # WTF?!?
                     gc.collect()
 
                     # Subtract the median.
