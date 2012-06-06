@@ -33,12 +33,10 @@ if __name__ == '__main__':
             help="The glob that the images must satisfy")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The directory for the output files.")
-    parser.add_argument("-m", "--median", action="store_true",
+    parser.add_argument("-m", "--no_median", action="store_true",
             help="Subtract the median of the scene?")
     parser.add_argument("--use_non_neg", action="store_true",
             help="Use non-negativity?")
-    parser.add_argument("--no_centroid", action="store_true",
-            help="Should we centroid each new data point?")
     parser.add_argument("--size", type=int, default=None,
             help="The size of the inferred scene.")
     parser.add_argument("--psf_hw", type=int, default=13,
@@ -91,6 +89,5 @@ if __name__ == '__main__':
             sceneL2=args.sceneL2)
 
     scene.run_inference(npasses=args.npasses,
-            do_centroiding=not args.no_centroid,
-            subtract_median=args.median,
+            subtract_median=not args.no_median,
             use_nn=args.use_non_neg)

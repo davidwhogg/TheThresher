@@ -170,12 +170,9 @@ class Scene(object):
 
         # Set the scene size.
         image = self.first_image
-        if size is None:
-            self.size = min(image.shape)
-        else:
-            assert size <= min(image.shape), \
-                    "The scene size must be <= to the data size."
-            self.size = size
+        assert size <= min(image.shape), \
+                "The scene size must be <= to the data size."
+        self.size = size
 
         # L2 norm weights.
         self.psfreg = psfreg
@@ -186,6 +183,9 @@ class Scene(object):
         self.psf = np.zeros((pd, pd))
         self.psf[psf_hw, psf_hw] = 1.
 
+        # HACK
+        self.size += 2 * psf_hw
+
         # Initialize the scene as a centered Gaussian.
         x = np.linspace(-0.5 * self.size, 0.5 * self.size, self.size) ** 2
         r = np.sqrt(x[:, None] + x[None, :])
@@ -195,8 +195,10 @@ class Scene(object):
         # Run lucky imaging. MAGIC: co-add the top 1 percent.
         image_list, ranks, scene = self.run_lucky(top_percent=1)
 
-        # Pad out the initial scene guess.
-        self.scene = convolve(scene - np.median(scene), self.psf, mode="full")
+        self.scene = scene - np.median(scene)
+
+        # HACK part 2.
+        self.size -= 2 * psf_hw
 
         import matplotlib.pyplot as pl
         pl.imshow(self.scene, interpolation="nearest", cmap="gray")
@@ -311,12 +313,9 @@ class Scene(object):
             for self.img_number, self.fn in enumerate(self.image_list):
                 if self.img_number >= current_img:
                     image = load_image(self.fn)
-                    if do_centroiding:
-                        coords, data = \
-                                centroid_image(image, self.scene, self.size,
-                                        coords=self.coords[self.fn])
-                    else:
-                        data = trim_image(image, self.size)
+                    coords, data = \
+                            centroid_image(image, self.scene, self.size,
+                                    coords=self.coords[self.fn])
 
                     data += self.sky - np.min(data)
 
@@ -329,20 +328,6 @@ class Scene(object):
                         alpha = 2. / N  # MAGIC: 2.
                         nn = False
 
-                    # On the first pass on the first image, normalize so that
-                    # the PSF sums to ~1.
-                    if self.img_number == 0 and self.pass_number == 0:
-                        self.psf = self._infer_psf(data)
-
-                        # Properly normalize the PSF.
-                        norm = np.sum(self.psf)
-                        self.psf /= norm
-
-                        # Re-infer the scene.
-                        self.scene = self._infer_scene(data)
-                        if subtract_median:
-                            self.scene -= np.median(self.scene)
-
                     # Do the inference.
                     self.old_scene = np.array(self.scene)
                     self.psf, self.this_scene = _worker(self, data)
@@ -350,6 +335,8 @@ class Scene(object):
                                             + alpha * self.this_scene
                     if nn:
                         self.scene[self.scene < 0] = 0.0
+
+                    # WTF?!?
                     gc.collect()
 
                     # Subtract the median.

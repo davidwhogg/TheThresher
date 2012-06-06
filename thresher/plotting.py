@@ -97,7 +97,7 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
 
     # Calculate stretch.
     sigma = estimate_sigma(new_scene)
-    scene_range = np.array([-10, 20]) * sigma
+    scene_range = np.array([-2.5, 5]) * sigma
 
     # Set up which data will go in which panel.
     predicted = convolve(this_scene, dpsf, mode="valid") + sky
@@ -127,9 +127,6 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
             vrange = panel[2]
         else:
             vrange = None
-
-        # if content is not None:
-        #     print title, content.min(), content.max(), vrange
 
         if content is not None:
             plot_image(ax, content, size=size, vrange=vrange)
