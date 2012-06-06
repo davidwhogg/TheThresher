@@ -86,7 +86,9 @@ class Tests(object):
         Get a scene object initialized in the test data directory.
 
         """
-        bp = os.path.join(os.path.abspath(__file__), "..", "..", "test")
+        bp = os.path.join(os.path.split(os.path.abspath(__file__))[0],
+                "..", "test",
+                "*.fits")
         scene = thresher.Scene(bp, psf_hw=17)
         scene.initialize_with_data()
         return scene
@@ -172,13 +174,43 @@ class Tests(object):
         # Check the results.
         np.testing.assert_allclose(convolution, matrix)
 
-    # def test_psf_norm(self):
-    #     """Test to make sure that the PSF is properly normalized."""
-    #     scene = self.get_scene()
-    #     scene._infer_psf(scene.first_image)
-    #     np.testing.assert_allclose(np.sum(scene.psf), 1.)
+    def test_centroid(self):
+        """
+        Test that the centroiding operation works as expected.
+
+        """
+        # Start by building a sample test image.
+        nx, ny = 150, 200
+        X, Y = np.meshgrid(range(nx), range(ny))
+        centers = np.array([[50.0, 45.0], [75.6, 150.1]])
+        widths = [10, 4]
+        amps = [5, 2]
+        img = np.zeros((ny, nx))
+        for i, p in enumerate(centers):
+            R2 = (X - p[0]) ** 2 + (Y - p[1]) ** 2
+            img += amps[i] * np.exp(- 0.5 * R2 / widths[i] ** 2) / widths[i]
+
+        # Then try a centered scene.
+        nsx, nsy = 45, 57
+        SX, SY = np.meshgrid(range(nsx), range(nsy))
+        scene = np.exp(-0.5 * ((SX - (nsx - 1) / 2) ** 2 \
+                + (SY - (nsy - 1) / 2) ** 2))
+
+        # Run the centroid.
+        size = 24
+        coords, data = thresher.centroid_image(img, scene, size)
+
+        # Make sure that it gets the right coordinates.
+        truth = centers[np.argmax(amps)]
+        assert np.all(coords[::-1] == truth)
+
+        # Make sure that the trimming worked.
+        np.testing.assert_allclose(data,
+                img[truth[1] - size / 2:truth[1] + size / 2,
+                    truth[0] - size / 2:truth[0] + size / 2])
+
 
 if __name__ == "__main__":
     tests = Tests()
     tests.setUp()
-    tests.test_psf_infer_convolution()
+    tests.test_centroid()

@@ -114,21 +114,20 @@ def centroid_image(image, scene, size, coords=None):
 
     """
     if coords is None:
-        ip0, ip1 = np.sum(image, axis=0), np.sum(image, axis=1)
-        sp0, sp1 = np.sum(scene, axis=0), np.sum(scene, axis=1)
+        convolved = convolve(image, scene, mode="valid")
+        center = np.unravel_index(convolved.argmax(), convolved.shape)
 
-        x0 = np.argmax(convolve(ip0[::-1], sp0, mode="valid"))
-        y0 = np.argmax(convolve(ip1[::-1], sp1, mode="valid"))
+        # Deal with shapes.
+        s_dim = (np.array(scene.shape) - 1) / 2
+        center = np.array(center) + s_dim
     else:
-        x0, y0 = coords
+        center = np.array(coords)
 
-    xmin = int(x0 + 0.5 * (scene.shape[0] - size))
-    ymin = int(y0 + 0.5 * (scene.shape[1] - size))
+    mn = center - size / 2
 
-    logging.info("Got image center {0}, {1}"
-            .format(xmin + 0.5 * size, ymin + 0.5 * size))
+    logging.info("Got image center: {0}".format(center))
 
-    return (x0, y0), image[xmin:xmin + size, ymin:ymin + size]
+    return center, image[mn[0]:mn[0] + size, mn[1]:mn[1] + size]
 
 
 def trim_image(image, size):
@@ -155,7 +154,6 @@ class Scene(object):
         # All the metadata.
         self.glob = imgglob
         self.outdir = os.path.abspath(outdir)
-        self.psf_hw = psf_hw
         self.sky = sky
         self.inferred_sky = 0
 
@@ -179,30 +177,10 @@ class Scene(object):
         self.sceneL2 = sceneL2
 
         # Initialize the PSF image as a delta function.
+        self.psf_hw = psf_hw
         pd = 2 * psf_hw + 1
         self.psf = np.zeros((pd, pd))
         self.psf[psf_hw, psf_hw] = 1.
-
-        # HACK
-        self.size += 2 * psf_hw
-
-        # Initialize the scene as a centered Gaussian.
-        x = np.linspace(-0.5 * self.size, 0.5 * self.size, self.size) ** 2
-        r = np.sqrt(x[:, None] + x[None, :])
-        self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
-        self.scene = convolve(self.scene, self.psf, mode="full")
-
-        # Run lucky imaging. MAGIC: co-add the top 1 percent.
-        image_list, ranks, scene = self.run_lucky(top_percent=1)
-
-        self.scene = scene - np.median(scene)
-
-        # HACK part 2.
-        self.size -= 2 * psf_hw
-
-        import matplotlib.pyplot as pl
-        pl.imshow(self.scene, interpolation="nearest", cmap="gray")
-        pl.savefig("blah.png")
 
         if kernel is None:
             # Make the PSF convolution kernel here. There's a bit of black
@@ -213,6 +191,23 @@ class Scene(object):
             self.kernel /= np.sum(self.kernel)
         else:
             self.kernel = kernel
+
+        # Initialize the scene as a centered Gaussian.
+        s = self.size + 2 * psf_hw
+        x = np.linspace(-0.5 * s, 0.5 * s, s) ** 2
+        r = np.sqrt(x[:, None] + x[None, :])
+        self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
+
+    def setup(self):
+        # HACK
+        self.size += 2 * self.psf_hw
+
+        # Run lucky imaging. MAGIC: co-add the top 1 percent.
+        images, ranks, scene = self.run_lucky(top_percent=1)
+        self.scene = scene - np.median(scene)
+
+        # HACK part 2.
+        self.size -= 2 * self.psf_hw
 
         # Calculate the mask that we will use to unravel the scene.
         self.scene_mask = unravel_scene(len(self.scene), self.psf_hw)
@@ -260,7 +255,7 @@ class Scene(object):
         if top is None and top_percent is None:
             top = len(ranked)
         elif top_percent is not None:
-            top = int(top_percent * 0.01 * len(ranked))
+            top = max(1, int(top_percent * 0.01 * len(ranked)))
 
         final = np.zeros((self.size, self.size))
         for i, k in enumerate(fns[:top]):
@@ -272,19 +267,6 @@ class Scene(object):
     def first_image(self):
         """Get the data for the first image"""
         return load_image(self.image_list[0])
-
-    def initialize_with_data(self):
-        """
-        Get a scene that can be used for initialization based on the _first_
-        piece of data.
-
-        """
-        pass
-        # image = self.first_image
-        # data = trim_image(image, self.size) + self.sky
-        # self.scene = np.zeros_like(self.scene)
-        # self.scene[self.psf_hw:-self.psf_hw, self.psf_hw:-self.psf_hw] = \
-        #         data
 
     def run_inference(self, basepath=None, npasses=5, current_pass=0,
             current_img=None, do_centroiding=True, subtract_median=False,
