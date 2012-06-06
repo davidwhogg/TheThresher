@@ -100,10 +100,10 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
     scene_range = np.array([-2.5, 5]) * sigma
 
     # Set up which data will go in which panel.
-    predicted = convolve(this_scene, dpsf, mode="valid") + sky
-    delta = data - predicted
     psf = convolve(dpsf, kernel, mode="same")
     norm = np.sum(dpsf)
+    predicted = convolve(this_scene, psf, mode="valid") + sky
+    delta = data - predicted
     panels = [[("PSF", psf),
         ("Data", data, np.median(data) + scene_range * norm),
         ("This Scene", this_scene, np.median(this_scene) + scene_range),

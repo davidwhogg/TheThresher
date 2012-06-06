@@ -123,11 +123,26 @@ def centroid_image(image, scene, size, coords=None):
     else:
         center = np.array(coords)
 
-    mn = center - size / 2
-
     logging.info("Got image center: {0}".format(center))
 
-    return center, image[mn[0]:mn[0] + size, mn[1]:mn[1] + size]
+    # Deal with the edges of the images.
+    mn = center - size / 2
+    mn_r = np.zeros_like(center)
+    mn_r[mn < 0] = -mn[mn < 0]
+    mn[mn < 0] = 0
+
+    mx = center + size / 2
+    delta = mx - np.array(image.shape)
+    m = mx > np.array(image.shape)
+    mx_r = size * np.ones_like(center)
+    mx_r[m] -= mx[m] - np.array(image.shape)[m]
+    mx[m] = np.array(image.shape)[m]
+
+    # Build the result.
+    result = np.zeros((size, size))
+    result[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = image[mn[0]:mx[0], mn[1]:mx[1]]
+
+    return center, result
 
 
 def trim_image(image, size):
