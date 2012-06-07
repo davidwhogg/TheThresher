@@ -13,8 +13,8 @@ data set, but at the resolution of the *best* images in the data set.
 
 ### Authors
 
-- **[David W. Hogg](http://cosmo.nyu.edu/hogg/)**, New York University
 - **[Dan Foreman-Mackey](http://danfm.ca/)**, New York University
+- **[David W. Hogg](http://cosmo.nyu.edu/hogg/)**, New York University
 
 ### License
 
@@ -69,7 +69,7 @@ bin/thresh '/path/to/data/*.fits' -o /directory/for/output --size 64
 
 You can run `bin/thresh -h` for more command line options.
 
-To plot the inference in real time, start the `bin/lucky-plot` daemon
+To plot the inference in real time, start the `bin/thresh-plot` daemon,
 which will monitor the output directory and generate the plots:
 
 ```
