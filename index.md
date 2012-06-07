@@ -18,10 +18,10 @@ data set, but at the resolution of the *best* images in the data set.
 
 ### License
 
-Copyright 2012 David W. Hogg & Dan Foreman-Mackey.
+Copyright 2012 the authors.
 
 The Thresher is free software licensed under the **GNU General Public
-License Version 2**.  See the file LICENSE for the full terms of this
+License Version 2**.  See the file `LICENSE` for the full terms of this
 license.
 
 ### Contributors
