@@ -16,3 +16,4 @@ build
 docs
 out
 results
+*.pdf
