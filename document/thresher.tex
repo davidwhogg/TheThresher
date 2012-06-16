@@ -1,94 +1,142 @@
-% This file is part of The Thresher.
-
-% to-do
-% -----
-% - Adam Bolton commented on my blog about http://arxiv.org/abs/0911.2689 and http://arxiv.org/abs/1111.6525 
-% - write first draft
-% - make and insert figures
-% - send to Lauer, Marshall, Kendrew, Brandner, Crotts for comments
-% - will require a full notation audit!
-
 \documentclass[12pt,preprint]{aastex}
 
-\newcounter{address}
-\setcounter{address}{0}
-\newcommand{\foreign}[1]{\textit{#1}}
-\newcommand{\etal}{\foreign{et~al.}}
-\newcommand{\project}[1]{\textsl{#1}}
+% has to be before amssymb it seems
+\usepackage{color,hyperref}
+\definecolor{linkcolor}{rgb}{0,0,0.5}
+\hypersetup{colorlinks=true,linkcolor=linkcolor,citecolor=linkcolor,
+            filecolor=linkcolor,urlcolor=linkcolor}
+\newcommand{\numberparagraphs}{}
+\newcommand{\nonumberparagraphs}{}
+
+\usepackage{url}
+\usepackage{algorithmic,algorithm}
+\usepackage{amssymb,amsmath}
+
+\newcommand{\arxiv}[1]{\href{http://arxiv.org/abs/#1}{arXiv:#1}}
+
+\newcommand{\project}[1]{{\sffamily #1}}
 \newcommand{\TheThresher}{\project{The~Thresher}}
 \newcommand{\LCOGT}{\project{LCOGT}}
+\newcommand{\Python}{\project{Python}}
+\newcommand{\numpy}{\project{numpy}}
+\newcommand{\github}{\project{GitHub}}
+\newcommand{\pip}{\project{pip}}
+\newcommand{\paper}{\emph{Article}}
+\newcommand{\license}{GNU General Public License v2}
+
 \newcommand{\documentname}{\textsl{Article}}
 
+\newcommand{\foreign}[1]{\emph{#1}}
+\newcommand{\etal}{\foreign{et\,al.}}
+\newcommand{\etc}{\foreign{etc.}}
+
+\newcommand{\Fig}[1]{Figure~\ref{fig:#1}}
+\newcommand{\fig}[1]{\Fig{#1}}
+\newcommand{\figlabel}[1]{\label{fig:#1}}
+\newcommand{\Tab}[1]{Table~\ref{tab:#1}}
+\newcommand{\tab}[1]{\Tab{#1}}
+\newcommand{\tablabel}[1]{\label{tab:#1}}
+\newcommand{\Eq}[1]{Equation~(\ref{eq:#1})}
+\newcommand{\eq}[1]{\Eq{#1}}
+\newcommand{\eqlabel}[1]{\label{eq:#1}}
+\newcommand{\Sect}[1]{Section~\ref{sect:#1}}
+\newcommand{\sect}[1]{\Sect{#1}}
+\newcommand{\App}[1]{Appendix~\ref{sect:#1}}
+\newcommand{\app}[1]{\App{#1}}
+\newcommand{\sectlabel}[1]{\label{sect:#1}}
+\newcommand{\Algo}[1]{Algorithm~\ref{algo:#1}}
+\newcommand{\algo}[1]{\Algo{#1}}
+\newcommand{\algolabel}[1]{\label{algo:#1}}
+
+% math symbols
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\like}{\mathscr{L}}
+\newcommand{\bvec}[1]{\boldsymbol{#1}}
 \newcommand{\given}{\,|\,}
 \newcommand{\transpose}[1]{{#1}^{\mathsf{T}}}
 \newcommand{\data}{D}
 \newcommand{\scene}{S}
 \newcommand{\psf}{\psi}
 \newcommand{\dpsf}{\tilde{\psi}}
+\newcommand{\unit}[1]{\,\mathrm{#1}}
 
-\title{DRAFT: \TheThresher: \\
-  Lucky imaging without the terrible, \emph{terrible} waste \\
-  \textit{or} \\
-  Don't throw away data!}
-\author{
-  David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA},\ref{email}},
-  Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP}},
-  Federica Bianco\altaffilmark{\ref{CCPP},\ref{LCOGT}}
+\begin{document}
+
+\title{\TheThresher: We don't throw away data}
+
+\author{%
+    Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP},\ref{email}} \&
+    David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA}}
 }
 
+\newcounter{address}
 \setcounter{address}{1}
 \altaffiltext{\theaddress}{\stepcounter{address}\label{CCPP} Center
   for Cosmology and Particle Physics, Department of Physics, New York
   University, 4 Washington Place, New York, NY 10003}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{email} To whom
+  correspondence should be addressed: \texttt{danfm@nyu.edu}}
 \altaffiltext{\theaddress}{\stepcounter{address}\label{MPIA}
   Max-Planck-Institut f\"ur Astronomie, K\"onigstuhl 17, D-69117
   Heidelberg, Germany}
-\altaffiltext{\theaddress}{\stepcounter{address}\label{email} To whom
-  correspondence should be addressed: \texttt{david.hogg@nyu.edu}}
-\altaffiltext{\theaddress}{\stepcounter{address}\label{LCOGT}
-  \LCOGT, UCSB, or whatever}
 
 \begin{abstract}
-We present a new method---and a new data-processing pipeline---for
-working with Lucky Imaging data, in which high-resolution images are
-obtained by combining very large numbers of short exposures taken
-under a variable point-spread function.  The method is based on
-previous work on multi-frame deconvolution; it is valuable because it
-does \emph{not} involve discarding any data whatsoever.  The method
-works by extracting information about the high-resolution scene from
-every image, no matter what that image's PSF.  We demonstrate the
-method on data taken with the \LCOGT\ lucky imaging system.
+    Source code available at \url{http://danfm.ca/thresher}
+    under the \license.
 \end{abstract}
 
-\begin{document}
+\keywords{%
+    methods: data analysis ---
+    methods: numerical ---
+    methods: statistical
+}
 
-\textbf{[This document is a very early draft dated 2012-05-25.  Please do not cite it without the permission of the authors.]}
+\clearpage
 
 \section{Introduction}
 
 High-resolution imaging has seen great success in the last decades,
 with the \project{Hubble Space Telescope}, natural and artificial
-guide-star adaptive optics, and lucky imaging.  Lucky imaging is
-possible with very inexpensive equipment, but as a technique it is not
-inexpensive because it involves so much waste.
+guide-star adaptive optics, and various post-processing techniques.
+With ground-based telescopes, very sophisticated hardware and/or
+software is required if one hopes to obtain high angular resolution.
+This is because atmospheric turbulence causes high frequency variations
+in the point spread function (PSF) that quickly degrade the angular
+resolution of the optics. The PSF of a standard long exposure suitable
+for astronomy will be smooth and much wider than the ideal diffraction
+limit. This is because it is produced by the time average over
+atmospheric variations. The standard post-processing techniques for
+dealing with this involve obtaining a large number of extremely short
+exposures---on the timescale of the atmospheric variations. These
+short exposures have low signal-to-noise and tend to have very
+complicated PSFs but they provide strong constraints on the
+diffraction limited scene when many images are used together.
 
-The idea behind traditional lucky imaging is that typical, smooth
-atmospheric seeing is a time average of a rapidly varying, multi-modal
-point-spread function.  If you take images rapidly with a very fast
-camera, occasionally the atmosphere will---just through
-chance---produce a nearly diffraction-limited image.  That is,
-occasionally the wavefront distortions from the atmosphere will come
-close to canceling (or really cancelling the imperfections in your
-real telescope).  In a lucky imaging run, you take an enormous number
+The idea of exploiting the high resolution information in short
+exposures was first suggested by \citet{labeyrie} and there has
+been a rich literature on this topic since then. In particular,
+a very popular technique called \emph{traditional lucky imaging}
+\citep[TLI;][]{law} is based on Fried's derivation of the probability
+of obtaining a
+frame with unusually ``lucky'' seeing when many images are taken
+quickly. That is, occasionally---just by chance---the wavefront
+distortions from the atmosphere will come close to canceling (or
+really canceling the imperfections in your real telescope).
+Lucky imaging is very popular because it is simple to understand and
+implement and it can be used with very inexpensive equipment, but as a
+technique it is not inexpensive because it results in a substantial
+amount of wasted data.
+
+In a typical TLI imaging run, you take an enormous number
 of short frames and \emph{throw almost all of them away}.  The
 resulting average, stack, or co-add of the best images can have very
-high angular resolution.  It can't have very high signal-to-noise,
-simply because so little data in the end get used (typically much less
-than one percent), but it can be very good for making measurements
-that require high spatial resolution.
+high angular resolution.  It doesn't, of course, have very high
+signal-to-noise, simply because so little data in the end get used
+(typically about one percent), but it can be very good for making
+measurements that require high spatial resolution.
 
 Lucky imaging is straightforward---and very simple to implement---but
-it violates one very important principle of empirical science: There
+it violates one very important principle of empirical science: there
 is no way that \emph{throwing away} non-corrupted data can give you
 \emph{more information}.  It might be that doing something heuristic
 with bad data will make your results worse, but if you are doing
@@ -104,20 +152,21 @@ justifiable when the point-spread function is varying rapidly.  Lucky
 imaging is also very sensible operationally: It provides results
 rapidly (even on-the-fly during the observing run), and permits
 analysis of enormous data sets without enormous computation (for
-example, it can be implemented in map-reduce).  What we are about to
-propose will not be as fast or as computationally efficient.  It will,
-however, be justifiable within probabilistic data analysis and will
+example, it can be implemented in map-reduce). The method that we
+propose here is not as fast or as computationally efficient.  It is,
+however, justifiable within probabilistic data analysis and will
 make use of every datum.
 
-...What is speckle imaging and it's poor cousin shift-and-add?..
+\TheThresher\ is an alternative to TLI and other post-processing
+techniques that is a special case of a broad class of algorithms
+called \emph{blind deconvolution} \citep{ayers}. In particular, it
+is an extension of the multi-frame online blind deconvolution (MOBD)
+from \citet{hirsch}. In this \documentname, we describe the theory
+behind and implementation of the robust blind deconvolution engine
+behind \TheThresher. We also demonstrate the significant improvements
+made possible by this technique using both simulated and real data.
 
-...Do a demo of traditional lucky imaging (TLI) where we move the
-threshold and see the results change...
-
-...How are these ideas related to deconvolution \citep{hirsch} and why
-do we want band-limited deconvolution \citep{magain}?..
-
-\section{Imaging generalities}
+\section{Imaging} \sectlabel{imaging}
 
 From our perspective, an image read out by a real camera (with, say,
 square pixels in a focal-plane array) is a noisy sampling of the
@@ -258,68 +307,67 @@ dangerous?..
 
 ...How, in general, are we going to proceed; why is online useful...
 
-\section{The method and pipeline}
+\section{Blind Deconvolution}
 
-The method is, for each of $N$ data images $\data_n$ taken in turn:
+To understand the process of blind deconvolution (BD), we must first discuss
+what an image is. It is standard practice to describe an observed image
+$D_n$ as the convolution of a constant scene $S$ with a point-spread function
+(PSF) $\Psi_n$ plus a noise contribution $E_n$
+\begin{equation} \eqlabel{full-convol}
+    D_n = \Psi_n \ast S + E_n \quad.
+\end{equation}
+The PSF $\Psi_n$ is the \emph{pixel-convolved} PSF at the focal plane of the
+detector at the time of the observation. It will include effects due to
+the atmosphere and the optics themselves. In general, the true forms of
+$\Psi_n$, $S$ and $E_n$ in \eq{full-convol} are completely \emph{unknown}
+and we would like to infer both $\Psi_n$ and $S$.
 
-1. Use the current scene image $\scene$ to infer the PSF $\psf_n$ for data
-image $\data_n$ by non-negative least squares.  The PSF model at this
-stage is a fixed-grid mixture of $\sigma=1$~pix ($FWHM = 2.35$~pix)
-two-dimensional, circular Gaussians.  In detail, when we infer the
-PSF, we also infer a sky level, and apply a L2 regularization to keep
-the PSF smooth when there are degeneracies.
-
-2. ``Deconvolve'' the PSF $\psf_n$ to make the deconvolved PSF
-$\dpsf_n$. We perform this deconvolution by replacing the mixture of
-Gaussians with a mixture of delta-functions, with the same amplitudes.
-This follows the general idea of band-limited deconvolution
-\citep{magain}.
-
-3. Infer the scene $\scene_n$ implied by this data image $\data_n$ given the
-deconvolved PSF $\dpsf_n$.  This fit is done without constraints
-except a small regularization to deal with the fact that the scene is
-bigger than the data image.
-
-4. Update the scene by combining the current scene $\scene$ with the newly
-inferred scene $\scene_n$ according to
-\begin{eqnarray}\displaystyle
-S &\leftarrow& [1-\alpha_n]\,S + \alpha_n\,S_n
-\quad ,
+Following \citet{magain}, it is useful to introduce a smoothing kernel $K$
+(with a size that is compatible with the sampling of the instrument)
+such that
+\begin{equation}
+    \Psi_n = K \ast P_n
+\end{equation}
+where $P_n$ is the \emph{deconvolved}-PSF (DPSF). \Eq{full-convol} can then
+be rewritten as
+\begin{equation} \eqlabel{soft-convol}
+    D_n = K \ast P_n \ast S + E_n \quad.
+\end{equation}
+With the correct re-shaping (to be explained), this operation can be
+re-written as a matrix multiplication in two equivalent ways
+\begin{eqnarray}
+    d_n = P_n^\prime \cdot s + e_n \quad \mathrm{and} \\
+    d_n = S^\prime \cdot p_n + e_n
 \end{eqnarray}
-where $\alpha_n$ is either $2/n$ or else $2/N$.  Possibly also apply
-non-negative clipping, sky adjustment, or other constraints or
-regularizations.
+where $s = (K \ast S)^\prime$ and $p = \Psi_n^\prime$.
 
-\section{Experiments and results}
 
-\section{Discussion}
+\section{Implementation}
 
-\acknowledgements It is a pleasure to thank
-  Mike Blanton (NYU),
-  Adam Bolton (Utah),
-  Brendon Brewer (UCSB),
-  Stefan Harmeling (T\"ubingen),
-  Michael Hirsch (UCL),
-  Phil Marshall (Oxford), and
-  Bernhard Sch\"olkopf (T\"ubingen)
-for contributions and comments.  We also single out
-  Dustin Lang (CMU) and
-  Robert Lupton (Princeton)
-for special thanks; DWH wouldn't understand anything about imaging if
-it weren't for the many years of discussions.  DWH and DFM were
-partially supported by NASA (grant NNX12AI50G) and the NSF
-(grant IIS-1124794).  This project made use of the NASA
-\project{Astrophysics Data System}, and code in the the
-\project{numpy}, \project{scipy}, and \project{matplotlib} open-source
-projects.  All the code used in this paper is available at
-\url{http://davidwhogg.github.com/TheThresher/}, and sample data are
-available at [URL HERE].
+\begin{thebibliography}{}\raggedright
 
-\begin{thebibliography}{70}
-\bibitem[Hirsch \etal(2011)]{hirsch}
-Hirsch,~M., Harmeling,~S., Sra,~S., Sch\"olkopf,~B., 2011, \aap, 531, A9
-\bibitem[Magain \etal(1998)]{magain}
-Magain,~P., Courbin,~F., Sohy,~S., 1998, \apj, 494, 472 
+\bibitem[Ayers\ \&\ Dainty(1988)]{ayers}
+    Ayers, G. R., \& Dainty, J. C. 1988, Opt. Lett., 13, 547
+
+\bibitem[Fried(1978)]{fried}
+    Fried, D. L. 1978, J. Opt. Soc. Amer., 86
+
+\bibitem[Hirsch\ \etal(2011)]{hirsch}
+Hirsch, M., Harmeling, S., Sra, S., \& Sch{\"o}lkopf, B.\ 2011, \aap, 531, A9
+
+\bibitem[Labeyrie(1970)]{labeyrie} Labeyrie, A.\ 1970, \aap, 6, 85
+
+\bibitem[Law\ \etal(2006)]{law}
+    Law, N.~M., Mackay, C.~D., \& Baldwin, J.~E.\ 2006, \aap, 446, 739
+
+\bibitem[Magain\ \etal(1998)]{magain} Magain, P., Courbin, F.,
+    \& Sohy, S.\ 1998, \apj, 494, 472
+
+
+
 \end{thebibliography}
+
+\clearpage
+\appendix
 
 \end{document}
