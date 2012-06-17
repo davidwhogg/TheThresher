@@ -21,3 +21,8 @@ default: ${DOCS}
 clean:
 	${RM} $(foreach d, ${TEX_FILES}, $(foreach suff, ${TMP_SUFFS}, ${d}.${suff}))
 
+figures: ../thresher/figures.py
+	python ../thresher/figures.py
+
+clean_figs:
+	${RM} index_gymnastics.pdf
