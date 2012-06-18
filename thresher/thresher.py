@@ -219,6 +219,7 @@ class Scene(object):
 
         # Run lucky imaging. MAGIC: co-add the top 1 percent.
         images, ranks, scene = self.run_lucky(top_percent=1)
+        self.image_list = images
         scene = scene[1]
         self.scene = scene - np.median(scene)
 
