@@ -73,14 +73,13 @@ if __name__ == '__main__':
     col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
     cols = pyfits.ColDefs([col1, col2])
     table_hdu = pyfits.new_table(cols)
-    image_hdu = pyfits.PrimaryHDU(final[0])
+    image_hdu = pyfits.PrimaryHDU(final[-1])
     image_hdu.header.update("cli", " ".join(sys.argv))
     hdus = [image_hdu]
     if args.top is not None:
-        hdus[-1].header.update("number", args.top[0])
         if len(args.top) > 1:
-            for i, t in enumerate(args.top[1:]):
-                hdus += [pyfits.ImageHDU(final[i + 1])]
+            for i, t in enumerate(args.top[:-1]):
+                hdus += [pyfits.ImageHDU(final[i])]
                 hdus[-1].header.update("number", t)
     hdus += [table_hdu]
 

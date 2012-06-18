@@ -273,10 +273,12 @@ class Scene(object):
         elif top_percent is not None:
             top = max(1, int(top_percent * 0.01 * len(ranked)))
 
-        final = np.zeros((len(top), self.size, self.size))
+        final = np.zeros((len(top) + 1, self.size, self.size))
         for j, t in enumerate(np.atleast_1d(top)):
             for i, k in enumerate(fns[:t]):
                 final[j] += data[results[k][0]] / float(t)
+        for i, k in enumerate(fns):
+            final[-1] += data[results[k][0]] / float(t)
 
         return fns, ranks, final
 

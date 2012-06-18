@@ -90,5 +90,8 @@ if __name__ == '__main__':
             ax1.set_title("All")
         ax2.set_title("Stretched")
 
-        fn, ext = os.path.splitext(outfn)
-        pl.savefig(fn + ".{0}".format(top) + ext)
+        if top > 0:
+            fn, ext = os.path.splitext(outfn)
+            pl.savefig(fn + ".{0}".format(top) + ext)
+        else:
+            pl.savefig(outfn)
