@@ -58,6 +58,7 @@
 % Parameters
 \newcommand{\data}{\ensuremath{D}}
 \newcommand{\scene}{\ensuremath{\Sigma}}
+\newcommand{\kernel}{\ensuremath{K}}
 \newcommand{\psf}{\ensuremath{\psi}}
 \newcommand{\dpsf}{\ensuremath{\tilde{\psi}}}
 \newcommand{\dvec}{\ensuremath{d}}
@@ -188,7 +189,7 @@ Importantly, if you want to think of the image as a pure
 \emph{sampling} of a convolved intensity field---and trust us, you
 do---then the point-spread function that convolves the intensity field
 should be not the pure atmospheric PSF, nor even the
-instrument-convolved atmospheric PSF.  It should be the
+instrument-convolved atmospheric PSF\@.  It should be the
 \emph{pixel-convolved} PSF \emph{at the focal plane}.  From here on,
 whenever we mention or use the PSF, we mean \emph{always} the
 pixel-convolved PSF at the focal plane.  This choice may seem strange,
@@ -225,10 +226,10 @@ the convolutions are discrete. Casting \eq{convimg}---our
 has significant computational benefits and there are many techniques
 available for solving such an system. Furthermore, following
 \citet{hirsch}, we can write the model in two equivalent ways:
-\begin{eqnarray}\eqlabel{linimg}\displaystyle
-\dvec_n &=& \pmat_n \cdot \svec + \evec_n
+\begin{eqnarray}\displaystyle
+\dvec_n &=& \pmat_n \cdot \svec + \evec_n \eqlabel{linimg1}
 \\
-\dvec_n &=& \smat \cdot \pvec_n + \evec_n
+\dvec_n &=& \smat \cdot \pvec_n + \evec_n \eqlabel{linimg2}
 \quad ,
 \end{eqnarray}
 where now $\dvec_n$ is the original data image $\data_n$ reformatted as a
@@ -238,7 +239,8 @@ in $\psf_n$, $s$ is a length-$W$ column vector representing the true
 scene, $\evec_n$ is a length-$M$ column vector of noise contributions to
 image $n$, $\smat$ is a $K\times M$ dense matrix that contains $W$
 independent values representing the scene, and $\pvec_n$ is a length-$K$
-column vector representing the PSF\@. In \eq{linimg}, the transformations
+column vector representing the PSF\@. In \eq{linimg1} and \eq{linimg2},
+the transformations
 $\psf_n \to \pmat_n$ and $\scene \to \smat$ are illustrated in \fig{index}.
 The idea is that if the image data are unwrapped into a
 one-dimensional vector, the linear convolution operation can always be
@@ -313,7 +315,7 @@ $\scene$ and $\{\psf_n\}$ that maximize the posterior PDF
 If we notice that $\log x$ is a monotonic function of $x$ and neglect
 the various irrelevant normalization constants, \eq{argmax1} can be
 equivalently posed
-\begin{equation}\eqlabel{argmax1}
+\begin{equation}\eqlabel{argmax2}
     \scene^*, \{\psf^*_n\} = \argmax_{\scene, \{\psf_n\}}
         \sum_n \left [ -\frac{1}{2} \, \chi^2
             + \log p (\scene) + \log p (\psf_n)
@@ -346,7 +348,7 @@ It is also standard practice to constrain both $\scene$ and $\psf$ to only
 have non-negative values. This is usually justified using ``physical''
 arguments. At first sight, this might seem natural butm in fact, it is not
 correct. While it is reasonable to force each PSF to be non-negative, it
-is likely that the the faintest sources in the full inferred scene are
+is likely that the faintest sources in the full inferred scene are
 below the detection threshold in any single observation but should be
 easily detectable in final scene. These sources will be very strongly
 affected by an non-negativity constraint because they might---in the units
@@ -354,7 +356,48 @@ of the inferred scene---have \emph{negative flux}! It is, therefore,
 irresponsible to apply any non-negativity constraint to $\scene$ during
 the optimization procedure.
 
+\section{Optimization}
+
+To perform the optimization in \eq{argmax2}, we use a variation of the
+online algorithm called \emph{stochastic gradient}. This algorithm is
+called online because it operates on a single data point at a time
+meaning that the full dataset never needs to be loaded into memory
+simultaneously. This allows the method to scale well to very large
+datasets. If we call the set (or vector) of parameters that we are
+optimizing over $w$ then a traditional bulk gradient method performs
+
+
 \section{Light Deconvolution}
+
+In their treatment of the deconvolution problem, \citet{magain} note that
+standard deconvolution techniques produce ring artifacts around point
+sources because the deconvolved scene violates the sampling theorem (CITE).
+This is because the \emph{perfect} deconvolution of a point source is
+essentially the Dirac $\delta$-function. A $\delta$-function can only be
+properly sampled with \emph{infinite} resolution and when it is resampled
+on a coarser grid, the brightness profile takes the form
+$\sim \frac{\sin r}{r}$. This effect is related to our argument that it
+is irrelevant to even imagine the \emph{true} scene. Instead, the best
+that one can do is to deconvolve to a system with larger but finite
+resolution.
+
+\citet{magain} go on to suggest a solution to this problem. Instead of
+trying to infer the scene at infinite resolution, it is better to rewrite
+\eq{convimg} as
+\begin{equation}
+    \data_n = \dpsf_n \ast \kernel \ast \scene + E_n
+\end{equation}
+where $\dpsf_n$ is the ``deconvolved PSF'' (dPSF) and \kernel\ is the
+PSF of the final scene. Then, the inference task is to infer
+\begin{equation}
+    \tilde{\scene} \equiv \kernel \ast \scene
+\end{equation}
+instead of \scene\ itself. This is achieved by re-writing \eq{linimg2} as
+\begin{equation}
+    \dvec_n = \tilde{\smat} \cdot \pvec_n + \evec_n
+\end{equation}
+where $\tilde{\smat}$ is related to $\tilde{\scene}$ in the same way that
+\smat\ is related \scene.
 
 \section{The method and pipeline}
 
