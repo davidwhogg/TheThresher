@@ -3,9 +3,43 @@ import scipy.optimize as op
 from scipy.ndimage.filters import gaussian_filter
 
 
-def find_sources(img, K, delta=3):
+X, Y = np.meshgrid(range(-1, 2), range(-1, 2))
+X, Y = X.flatten(), Y.flatten()
+A = np.vstack([np.ones(9), X, Y, X * X, X * Y, Y * Y]).T
+ATAinvA = np.dot(np.linalg.inv(np.dot(A.T, A)), A.T)
+
+
+def centroid_source(img, x0, y0):
     """
-    Detect the K brightest sources in an image.
+    Find the centroid of a source by doing a 2nd order fit.
+
+    ## Arguments
+
+    * `img` (numpy.ndarray): The data.
+    * `x0` (int): The brightest pixel in the zeroth dimension of `img`.
+    * `y0` (int): The brightest pixel in the first dimension of `img`.
+
+    ## Returns
+
+    * `xc` (float): The center of the source in the zeroth dimension of `img`.
+    * `yc` (float): The same in the first dimension.
+
+    """
+    x0, y0 = int(x0), int(y0)
+    patch = img[x0 - 1:x0 + 2, y0 - 1:y0 + 2]
+    a, b, c, d, e, f = np.dot(ATAinvA, patch.flatten())
+    yc = (2 * c * d + e * b) / (e * e - 4 * f * d)
+    xc = (2 * b * f + e * c) / (e * e - 4 * f * d)
+    assert np.abs(xc) < 1.5 and np.abs(yc) < 1.5, \
+            "(x0, y0) = ({0}, {1}) and (dx, dy) = ({2}, {3})" \
+            .format(x0, y0, xc, yc)
+    return x0 + xc, y0 + yc
+
+
+def find_sources(img, K, delta=3, padding=0):
+    """
+    Detect the K brightest sources in an image using brightest pixel and then
+    refined using `centroid_source`.
 
     ## Arguments
 
@@ -15,51 +49,86 @@ def find_sources(img, K, delta=3):
     ## Keyword Arguments
 
     * `delta` (float): The minimum distance between sources (in pixels).
+    * `padding` (float): The number of pixels around the outer edge of the
+      image to ignore.
+
+    ## Returns
+
+    * `coords` (numpy.ndarray): List of source positions with two columns for
+      the zeroth and first dimensions of `img` respectively.
 
     """
+    # Account for the size of centroiding patch.
+    padding += 1
+
+    # Find the brightest pixels.
     inds = np.argsort(img.flatten())[::-1]
     coords = np.array([(-delta, -delta)])
 
+    # Loop over the brightest pixels until we find `K` acceptable sources.
     for i in inds[1:]:
         tmp = np.array(np.unravel_index(i, img.shape))
-        if not np.any(np.sum(np.abs(coords - tmp), axis=1) < delta):
-            rng = [max(0, tmp[0] - delta),
-                   min(img.shape[0], tmp[0] + delta),
-                   max(0, tmp[1] - delta),
-                   min(img.shape[1], tmp[1] + delta)]
-            smimg = img[rng[0]:rng[1], rng[2]:rng[3]]
-            Y, X = np.meshgrid(range(rng[2], rng[3]), range(rng[0], rng[1]))
-            norm = np.sum(smimg)
-            x0, y0 = np.sum(X * smimg) / norm, np.sum(Y * smimg) / norm
-            coords = np.concatenate([coords, [[x0, y0]]], axis=0)
+        if np.all(np.sum((coords - tmp) ** 2, axis=1) > delta ** 2) and \
+                padding <= tmp[0] < img.shape[0] - padding and \
+                padding <= tmp[1] < img.shape[1] - padding:
+            # Refine the centroiding.
+            try:
+                res = centroid_source(img, *tmp)
+            except:
+                pass
+            else:
+                coords = np.concatenate([coords, [res]], axis=0)
         if len(coords) >= K + 1:
             break
 
     return coords[1:]
 
 
-def _generate_exact(shape, coords, p):
+def _generate(shape, coords, p):
     result = np.zeros(shape)
     x, y = np.arange(shape[0]), np.arange(shape[1])
-    w2 = p[0]
-    norm = np.sqrt(2 * np.pi * w2)
+    w2 = p[0] ** 2
+    norm = 1.0 / (2 * np.pi * w2)
     gamm = -0.5 / w2
+
     for i, c in enumerate(coords):
         r2 = ((x - c[0]) ** 2)[:, None] + ((y - c[1]) ** 2)[None, :]
-        result += p[i + 1] * np.exp(gamm * r2) / norm
+        result += p[i + 1] * np.exp(gamm * r2) * norm
 
     return result
 
 
-def _generate_image(shape, coords, p):
-    # Build the delta function map.
-    delta_map = np.zeros(shape)
-    delta_map[coords[:, 0].astype(int), coords[:, 1].astype(int)] = p[1:]
+def _synthesize_patch(shape, coords, flux, sigma2):
+    x, y = np.arange(shape[0]), np.arange(shape[1])
+    r2 = ((x - coords[0]) ** 2)[:, None] + ((y - coords[1]) ** 2)[None, :]
+    result = flux * np.exp(-0.5 * r2 / sigma2) / (2 * np.pi * sigma2)
+    return result
 
-    return gaussian_filter(delta_map, p[0])
+
+def _chi(p, coords, img):
+    sigma2 = 1.0  # p[0] ** 2
+    fluxes = p[1:]
+
+    patch_size = 3
+    shape = [2 * patch_size] * 2
+    npatch = np.prod(shape)
+
+    chi = np.zeros(len(coords) * npatch)
+
+    for i, (xc, yc) in enumerate(coords):
+        xmn = int(xc - patch_size)
+        xmx = xmn + 2 * patch_size
+        ymn = int(yc - patch_size)
+        ymx = ymn + 2 * patch_size
+        data = img[xmn:xmx, ymn:ymx]
+        patch = _synthesize_patch(shape, (xc - xmn, yc - ymn), fluxes[i],
+                sigma2)
+        chi[i * npatch:(i + 1) * npatch] = (data - patch).flatten()
+
+    return chi
 
 
-def measure_sources(img, K, w=3.):
+def measure_sources(img, K, w=3., padding=None):
     """
     Find and measure the flux of the K brightest sources in an image.
 
@@ -73,37 +142,60 @@ def measure_sources(img, K, w=3.):
     * `w` (float): Initial guess for the width of sources (in pixels).
 
     """
+    if padding is None:
+        padding = 10
     # MAGIC: exclude sources within `3 * w` pixels of known ones.
     coords = find_sources(img, K, 3 * w)
 
     # Fit for the fluxes.
-    p0 = np.ones(K + 1)
+    p0 = 100 + 400 * np.ones(K + 1)
     p0[0] = w
-    bounds = [(1, None)] + [(0, None) for i in range(K)]
 
-    chi2 = lambda p: np.sum((img - _generate_exact(img.shape, coords, p)) ** 2)
-    p1 = op.fmin_l_bfgs_b(chi2, p0, approx_grad=True, bounds=bounds)
+    p1 = op.leastsq(_chi, p0, args=(coords, img))
     p1 = p1[0]
 
-    return p1[0], np.hstack((coords, np.atleast_2d(p1[1:]).T))
+    return p1[0] ** 2, np.hstack((coords, np.atleast_2d(p1[1:]).T))
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as pl
 
+    # Test centroid.
+    x0, y0 = 3.1, 6.2
+    img = _generate((10, 10), [[x0, y0]], [1.0, 1.0])
+    xc, yc = centroid_source(img, np.floor(x0), np.floor(y0))
+    print("Error in centroid: {0}".format((np.abs(xc - x0), np.abs(yc - y0))))
+    pl.imshow(img, interpolation="nearest", cmap="gray")
+    pl.plot(yc, xc, "+b")
+    pl.plot(y0, x0, "+r")
+    pl.savefig("centroid.png")
+
+    # Test full pipeline.
+    # Generate a test catalog.
     nx, ny = 200, 300
-    K0 = 10
-    w0 = 4
+    K0 = 20
+    w0 = 1
     truth = np.random.rand(K0 * 3).reshape((K0, 3))
     truth[:, 0] *= nx
     truth[:, 1] *= ny
-    truth[:, 2] *= 500
-    img = _generate_exact((nx, ny), truth, np.append(w0, truth[:, 2]))
+    truth[:, 2] *= 400
+    truth[:, 2] += 100
+
+    # Generate the image.
+    img = _generate((nx, ny), truth, np.append(w0, truth[:, 2]))
+
+    # Add noise.
     img += 1 * np.random.randn(nx * ny).reshape(img.shape)
 
-    w, coords = measure_sources(img, 10, w=w0)
-    print truth[np.argsort(truth[:, 2])[::-1][:10]]
+    # Measure the sources.
+    K = 3
+    w, coords = measure_sources(img, K, w=w0)
+
+    print "Truth:"
+    print truth[np.argsort(truth[:, 2])[::-1][:K]]
+    print "Detections:"
     print coords
+    print "Source size:",
     print w0, w
 
     pl.figure()
@@ -111,7 +203,7 @@ if __name__ == "__main__":
     pl.imshow(img, interpolation="nearest", cmap="gray")
 
     pl.subplot(122)
-    pl.imshow(_generate_exact(img.shape, coords, np.append(w, coords[:, 2])),
+    pl.imshow(_generate(img.shape, coords, np.append(w, coords[:, 2])),
         interpolation="nearest", cmap="gray")
 
     pl.savefig("detect.pdf")
