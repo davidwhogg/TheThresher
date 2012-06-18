@@ -80,7 +80,7 @@ if __name__ == '__main__':
         hdus[-1].header.update("number", args.top[0])
         if len(args.top) > 1:
             for i, t in enumerate(args.top[1:]):
-                hdus += [pyfits.ImageHDU(final[i])]
+                hdus += [pyfits.ImageHDU(final[i + 1])]
                 hdus[-1].header.update("number", t)
     hdus += [table_hdu]
 
