@@ -1,6 +1,5 @@
 import numpy as np
 import scipy.optimize as op
-from scipy.ndimage.filters import gaussian_filter
 
 
 X, Y = np.meshgrid(range(-1, 2), range(-1, 2))
