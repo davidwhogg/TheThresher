@@ -32,7 +32,7 @@ if __name__ == '__main__':
             help="The size of the co-added scene.")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The output file.")
-    parser.add_argument("-t", "--top", type=int, default=None,
+    parser.add_argument("-t", "--top", type=int, nargs='+', default=None,
             help="Co-add the top N images")
     parser.add_argument("--log", type=str, default=None,
             help="The filename for the log.")
@@ -73,9 +73,15 @@ if __name__ == '__main__':
     col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
     cols = pyfits.ColDefs([col1, col2])
     table_hdu = pyfits.new_table(cols)
-    image_hdu = pyfits.PrimaryHDU(final)
+    image_hdu = pyfits.PrimaryHDU(final[0])
     image_hdu.header.update("cli", " ".join(sys.argv))
+    hdus = [image_hdu]
     if args.top is not None:
-        image_hdu.header.update("number", args.top)
+        hdus[-1].header.update("number", args.top[0])
+        if len(args.top) > 1:
+            for i, t in enumerate(args.top[1:]):
+                hdus += [pyfits.ImageHDU(final[i])]
+                hdus[-1].header.update("number", t)
+    hdus += [table_hdu]
 
-    pyfits.HDUList([image_hdu, table_hdu]).writeto(outfn, clobber=True)
+    pyfits.HDUList(hdus).writeto(outfn, clobber=True)

@@ -57,31 +57,38 @@ if __name__ == '__main__':
 
     # Read in the data.
     hdus = pyfits.open(fn)
-    img = np.array(hdus[0].data, dtype=float)
-    top = int(hdus[0].header.get("number", -1))
+    imgs, tops = [], []
+    for i in range(len(hdus) - 1):
+        imgs += [np.array(hdus[i].data, dtype=float)]
+        tops += [int(hdus[i].header.get("number", -1))]
     hdus.close()
 
-    # Calculate sigma.
-    sigma = estimate_sigma(img)
-    median = np.median(img)
-    r = np.array([-2.5, 5]) * sigma
-    vrange = median + r
-    vrange_hard = median + 0.1 * r
+    for i in range(len(imgs)):
+        img = imgs[i]
+        top = tops[i]
 
-    # Set up figure.
-    fig = pl.figure(figsize=(16, 8))
-    ax1 = fig.add_subplot(121)
-    ax2 = fig.add_subplot(122)
+        # Calculate sigma.
+        sigma = estimate_sigma(img)
+        median = np.median(img)
+        r = np.array([-2.5, 5]) * sigma
+        vrange = median + r
+        vrange_hard = median + 0.1 * r
 
-    # Do the plotting.
-    plot_image(ax1, img, vrange=vrange)
-    plot_image(ax2, img, vrange=vrange_hard)
+        # Set up figure.
+        fig = pl.figure(figsize=(16, 8))
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
 
-    # Bookkeeping.
-    if top > 0:
-        ax1.set_title("Top {0:d}".format(top))
-    else:
-        ax1.set_title("All")
-    ax2.set_title("Stretched")
+        # Do the plotting.
+        plot_image(ax1, img, vrange=vrange)
+        plot_image(ax2, img, vrange=vrange_hard)
 
-    pl.savefig(outfn)
+        # Bookkeeping.
+        if top > 0:
+            ax1.set_title("Top {0:d}".format(top))
+        else:
+            ax1.set_title("All")
+        ax2.set_title("Stretched")
+
+        fn, ext = os.path.splitext(outfn)
+        pl.savefig(fn + ".{0}".format(top) + ext)

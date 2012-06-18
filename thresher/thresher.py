@@ -219,6 +219,7 @@ class Scene(object):
 
         # Run lucky imaging. MAGIC: co-add the top 1 percent.
         images, ranks, scene = self.run_lucky(top_percent=1)
+        scene = scene[0]
         self.scene = scene - np.median(scene)
 
         # HACK part 2.
@@ -272,9 +273,10 @@ class Scene(object):
         elif top_percent is not None:
             top = max(1, int(top_percent * 0.01 * len(ranked)))
 
-        final = np.zeros((self.size, self.size))
-        for i, k in enumerate(fns[:top]):
-            final += data[results[k][0]] / float(top)
+        final = np.zeros((len(top), self.size, self.size))
+        for j, t in enumerate(np.atleast_1d(top)):
+            for i, k in enumerate(fns[:t]):
+                final[j] += data[results[k][0]] / float(t)
 
         return fns, ranks, final
 
