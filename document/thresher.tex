@@ -74,6 +74,11 @@
     \includegraphics[width=\textwidth]{#1}%
 \end{center}%
 }
+\newcommand{\threshplot}[1]{%
+\begin{center}%
+\includegraphics[width=0.8\textwidth,trim=21cm 11cm 4cm 11.8cm,clip=true]{#1}%
+\end{center}%
+}
 
 \begin{document}
 
@@ -471,7 +476,7 @@ intensive but it converges faster since it is more accurate.
 
 We ran both TLI and \TheThresher\ on a stack of 30000 images of a
 trinary star system from \LCOGT\@. We show the results using 10, 30, 100,
-300, 1000, 3000, 10000, 30000 images stretched to roughly the same
+300, 1000, 3000 images stretched to roughly the same
 grayscale in all images.
 
 \begin{figure}[!htbp]
@@ -482,9 +487,22 @@ grayscale in all images.
 \end{figure}
 
 \begin{figure}[!htbp]
+    \threshplot{thresh10.png}
+    \caption{The results of running \TheThresher\ on 10 images.
+        The image on the right is the same data as the figure on the
+        left with a harder stretch.\figlabel{thresh:10}}
+\end{figure}
+
+\begin{figure}[!htbp]
     \dfmplot{tli30.png}
     \caption{The same as \fig{tli:10} for the top 30 best images.
             \figlabel{tli:30}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \threshplot{thresh30.png}
+    \caption{The same as \fig{thresh:10} for the top 30 best images.
+            \figlabel{thresh:30}}
 \end{figure}
 
 \begin{figure}[!htbp]
@@ -494,9 +512,21 @@ grayscale in all images.
 \end{figure}
 
 \begin{figure}[!htbp]
+    \threshplot{thresh100.png}
+    \caption{The same as \fig{thresh:10} for the top 100 best images.
+            \figlabel{thresh:100}}
+\end{figure}
+
+\begin{figure}[!htbp]
     \dfmplot{tli300.png}
     \caption{The same as \fig{tli:10} for the top 300 best images.
             \figlabel{tli:300}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \threshplot{thresh300.png}
+    \caption{The same as \fig{thresh:10} for the top 300 best images.
+            \figlabel{thresh:300}}
 \end{figure}
 
 \begin{figure}[!htbp]
@@ -506,21 +536,21 @@ grayscale in all images.
 \end{figure}
 
 \begin{figure}[!htbp]
+    \threshplot{thresh1000.png}
+    \caption{The same as \fig{thresh:10} for the top 1000 best images.
+            \figlabel{thresh:1000}}
+\end{figure}
+
+\begin{figure}[!htbp]
     \dfmplot{tli3000.png}
     \caption{The same as \fig{tli:10} for the top 3000 best images.
             \figlabel{tli:3000}}
 \end{figure}
 
 \begin{figure}[!htbp]
-    \dfmplot{tli10000.png}
-    \caption{The same as \fig{tli:10} for the top 10000 best images.
-            \figlabel{tli:10000}}
-\end{figure}
-
-\begin{figure}[!htbp]
-    \dfmplot{tli30000.png}
-    \caption{The same as \fig{tli:10} for the top 10000 best images.
-            \figlabel{tli:30000}}
+    \threshplot{thresh3000.png}
+    \caption{The same as \fig{thresh:10} for the top 3000 best images.
+            \figlabel{thresh:3000}}
 \end{figure}
 
 \acknowledgements It is a pleasure to thank
