@@ -74,7 +74,6 @@ def unravel_scene(S, P):
 def unravel_psf(S, P):
     D = S - 2 * P
     data_size = D ** 2
-    scene_size = S ** 2
     psf_size = (2 * P + 1) ** 2
 
     psfX, psfY = index2xy((2 * P + 1,) * 2, np.arange(psf_size))
@@ -87,10 +86,6 @@ def unravel_psf(S, P):
         s = slice(k * psf_size, (k + 1) * psf_size)
         rows[s] = k
         cols[s] = xy2index((S, S), psfX + dx, psfY + dy)
-
-    # add entries for old-scene-based regularization
-    # rows = np.append(rows, np.arange(data_size, data_size + scene_size))
-    # cols = np.append(cols, np.arange(scene_size))
 
     return rows, cols
 
@@ -132,7 +127,6 @@ def centroid_image(image, scene, size, coords=None):
     mn[mn < 0] = 0
 
     mx = center + size / 2
-    delta = mx - np.array(image.shape)
     m = mx > np.array(image.shape)
     mx_r = size * np.ones_like(center)
     mx_r[m] -= mx[m] - np.array(image.shape)[m]
@@ -291,8 +285,6 @@ class Scene(object):
     def first_image(self):
         """Get the data for the first image"""
         return load_image(self.image_list[0])
-
-    def run_simple(self,
 
     def run_inference(self, basepath=None, npasses=5, current_pass=0,
             current_img=None, do_centroiding=True, subtract_median=False,
