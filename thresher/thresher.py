@@ -288,7 +288,7 @@ class Scene(object):
 
     def run_inference(self, basepath=None, npasses=5, current_pass=0,
             current_img=None, do_centroiding=True, subtract_median=False,
-            use_nn=True, top=None):
+            use_nn=True, top=None, simple=True):
         """
         Run the full inference on the dataset.
 
@@ -333,7 +333,7 @@ class Scene(object):
 
                     # Do the inference.
                     self.old_scene = np.array(self.scene)
-                    self.psf, self.dlds = _worker(self, data)
+                    self.psf, self.dlds = _worker(self, data, simple=simple)
                     self.scene = self.scene + alpha * self.dlds
                     if nn:
                         self.scene[self.scene < 0] = 0.0
@@ -354,15 +354,16 @@ class Scene(object):
             current_img = 0
 
     def get_psf_matrix(self, L2=True):
-        S = len(self.size)
-        P = len(self.psf_hw)
+        S = len(self.scene)
+        P = self.psf_hw
 
         D = S - 2 * P
         data_size = D ** 2
         scene_size = S ** 2
+        psf_size = (2 * P + 1) ** 2
 
         # NOTE: the PSF is reversed here.
-        vals = np.zeros((data_size, self.psf_size)) \
+        vals = np.zeros((data_size, psf_size)) \
                 + self.psf.flatten()[None, ::-1]
         vals = vals.flatten()
 
@@ -378,8 +379,9 @@ class Scene(object):
 
             shape[0] += scene_size
 
-        psf_matrix = csr_matrix((vals, (self.psf_rows, self.psf_cols)),
-                shape=shape)
+        print len(vals), len(rows), len(cols), shape, scene_size, self.scene.size
+
+        psf_matrix = csr_matrix((vals, (rows, cols)), shape=shape)
 
         return psf_matrix
 
@@ -449,15 +451,18 @@ class Scene(object):
         """
         psf_matrix = self.get_psf_matrix(L2=False)
 
-        return psf_matrix.transpose().dot(data.flatten() -
+        dlds = psf_matrix.transpose().dot(data.flatten() -
                 psf_matrix.dot(self.scene.flatten()))
+        dlds = dlds.reshape(self.scene.shape)
+
+        return dlds
 
     def _save_state(self, data):
         _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
         outfn = os.path.join(self.outdir, _id + ".fits")
 
         hdus = [pyfits.PrimaryHDU(data),
-                pyfits.ImageHDU(self.this_scene),
+                pyfits.ImageHDU(self.dlds),
                 pyfits.ImageHDU(self.scene),
                 pyfits.ImageHDU(self.psf),
                 pyfits.ImageHDU(self.kernel)]
