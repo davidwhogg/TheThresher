@@ -154,8 +154,8 @@ def trim_image(image, size):
 def _worker(scene, data):
     # Do the inference.
     psf = scene._infer_psf(data)
-    new_scene = scene._infer_scene(data)
-    return psf, new_scene
+    dlds = scene._infer_scene(data) - scene.scene
+    return psf, dlds
 
 
 class Scene(object):
@@ -289,6 +289,8 @@ class Scene(object):
         """Get the data for the first image"""
         return load_image(self.image_list[0])
 
+    def run_simple(self,
+
     def run_inference(self, basepath=None, npasses=5, current_pass=0,
             current_img=None, do_centroiding=True, subtract_median=False,
             use_nn=True, top=None):
@@ -336,9 +338,8 @@ class Scene(object):
 
                     # Do the inference.
                     self.old_scene = np.array(self.scene)
-                    self.psf, self.this_scene = _worker(self, data)
-                    self.scene = (1 - alpha) * self.scene \
-                                            + alpha * self.this_scene
+                    self.psf, self.dlds = _worker(self, data)
+                    self.scene = self.scene + alpha * self.dlds
                     if nn:
                         self.scene[self.scene < 0] = 0.0
 
