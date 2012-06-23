@@ -49,6 +49,8 @@ if __name__ == '__main__':
             help="The sky level of the images")
     parser.add_argument("-n", "--npasses", type=int, default=1,
             help="The number of inference passes to run")
+    parser.add_argument("-t", "--top", type=int, default=None,
+            help="Only use the top N images as defined by the TLI ordering.")
     parser.add_argument("--log", type=str, default=None,
             help="The filename for the log.")
     parser.add_argument("-v", "--verbose", action="store_true",
@@ -90,4 +92,4 @@ if __name__ == '__main__':
     scene.setup()
     scene.run_inference(npasses=args.npasses,
             subtract_median=not args.no_median,
-            use_nn=args.use_non_neg)
+            use_nn=args.use_non_neg, top=args.top)

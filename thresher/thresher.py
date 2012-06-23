@@ -291,7 +291,7 @@ class Scene(object):
 
     def run_inference(self, basepath=None, npasses=5, current_pass=0,
             current_img=None, do_centroiding=True, subtract_median=False,
-            use_nn=True):
+            use_nn=True, top=None):
         """
         Run the full inference on the dataset.
 
@@ -312,8 +312,11 @@ class Scene(object):
 
         N = len([i for i in self.image_list])
 
+        iml = self.image_list
+        if top is not None:
+            iml = iml[:int(top)]
         for self.pass_number in xrange(current_pass, npasses):
-            for self.img_number, self.fn in enumerate(self.image_list):
+            for self.img_number, self.fn in enumerate(iml):
                 if self.img_number >= current_img:
                     image = load_image(self.fn)
                     coords, data = \
