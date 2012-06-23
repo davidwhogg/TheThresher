@@ -89,8 +89,8 @@ def unravel_psf(S, P):
         cols[s] = xy2index((S, S), psfX + dx, psfY + dy)
 
     # add entries for old-scene-based regularization
-    rows = np.append(rows, np.arange(data_size, data_size + scene_size))
-    cols = np.append(cols, np.arange(scene_size))
+    # rows = np.append(rows, np.arange(data_size, data_size + scene_size))
+    # cols = np.append(cols, np.arange(scene_size))
 
     return rows, cols
 
@@ -151,10 +151,13 @@ def trim_image(image, size):
     return image[xmin:xmin + size, ymin:ymin + size]
 
 
-def _worker(scene, data):
+def _worker(scene, data, simple=False):
     # Do the inference.
     psf = scene._infer_psf(data)
-    dlds = scene._infer_scene(data) - scene.scene
+    if simple:
+        dlds = scene._compute_dlds(data)
+    else:
+        dlds = scene._infer_scene(data) - scene.scene
     return psf, dlds
 
 
@@ -358,6 +361,36 @@ class Scene(object):
             # image on the first pass through the data when we're restarting.
             current_img = 0
 
+    def get_psf_matrix(self, L2=True):
+        S = len(self.size)
+        P = len(self.psf_hw)
+
+        D = S - 2 * P
+        data_size = D ** 2
+        scene_size = S ** 2
+
+        # NOTE: the PSF is reversed here.
+        vals = np.zeros((data_size, self.psf_size)) \
+                + self.psf.flatten()[None, ::-1]
+        vals = vals.flatten()
+
+        rows, cols = self.psf_rows, self.psf_cols
+        shape = [data_size, scene_size]
+
+        # Append the identity for the L2 norm.
+        if L2:
+            vals = np.append(vals, self.sceneL2 + np.zeros(self.scene.size))
+            rows = np.append(rows, np.arange(data_size,
+                data_size + scene_size))
+            cols = np.append(cols, np.arange(scene_size))
+
+            shape[0] += scene_size
+
+        psf_matrix = csr_matrix((vals, (self.psf_rows, self.psf_cols)),
+                shape=shape)
+
+        return psf_matrix
+
     @dfm_time
     def _infer_psf(self, data, useL2=False):
         """
@@ -407,24 +440,25 @@ class Scene(object):
         this image given the PSF.
 
         """
-        # NOTE: the PSF is reversed here.
-        vals = np.zeros((data.size, self.psf.size)) \
-                + self.psf.flatten()[None, ::-1]
-        vals = vals.flatten()
-
-        # Append the identity for the L2 norm.
-        vals = np.append(vals, self.sceneL2 + np.zeros(self.scene.size))
-
-        psf_matrix = csr_matrix((vals, (self.psf_rows, self.psf_cols)),
-                shape=(data.size + self.scene.size, self.scene.size))
-
         # Infer scene and return
         data_vector = np.append(data.flatten(), np.zeros(self.scene.size))
-        results = lsqr(psf_matrix, data_vector)
+        results = lsqr(self.get_psf_matrix(L2=True), data_vector)
 
         new_scene = results[0].reshape(self.scene.shape)
 
         return new_scene
+
+    @dfm_time
+    def _compute_dlds(self, data):
+        """
+        Take data and a current belief about the PSF; compute the gradient of
+        log-likelihood wrt scene.
+
+        """
+        psf_matrix = self.get_psf_matrix(L2=False)
+
+        return psf_matrix.transpose().dot(data.flatten() -
+                psf_matrix.dot(self.scene.flatten()))
 
     def _save_state(self, data):
         _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
