@@ -30,8 +30,8 @@ def centroid_source(img, x0, y0):
     yc = (2 * c * d + e * b) / (e * e - 4 * f * d)
     xc = (2 * b * f + e * c) / (e * e - 4 * f * d)
     assert np.abs(xc) < 1 and np.abs(yc) < 1, \
-            "(x0, y0) = ({0}, {1}) and (dx, dy) = ({2}, {3})" \
-            .format(x0, y0, xc, yc)
+            "(x0, y0) = ({0}, {1}) and (dx, dy) = ({2}, {3}) {4}" \
+            .format(x0, y0, xc, yc, patch)
     return x0 + xc, y0 + yc
 
 
@@ -86,13 +86,17 @@ def find_sources(img, K, delta=3, padding=0):
 def _generate(shape, coords, p):
     result = np.zeros(shape)
     x, y = np.arange(shape[0]), np.arange(shape[1])
-    w2 = p[0] ** 2
-    norm = 1.0 / (2 * np.pi * w2)
-    gamm = -0.5 / w2
+    norm = 1.0 / (2 * np.pi)
+    gammas = [1.0 / p[0] ** 2, 1.0 / (p[0] ** 2 + p[1] ** 2)]
+    strehl = logistic(p[2])
+    # strehl = 0.5
+    amps = [strehl, 1 - strehl]
 
     for i, c in enumerate(coords):
         r2 = ((x - c[0]) ** 2)[:, None] + ((y - c[1]) ** 2)[None, :]
-        result += p[i + 1] * np.exp(gamm * r2) * norm
+        for j in range(2):
+            result += amps[j] * p[i + 3] * np.exp(-0.5 * r2 * gammas[j]) \
+                    * norm * gammas[j]
 
     return result
 
@@ -113,32 +117,28 @@ def _get_patch(img, xc, yc, patch_size):
     return xmn, ymn, data
 
 
-def _chi(p, coords, img, w):
-    # Nsc = len(p[1:]) / 3
-    # dx = p[1 + Nsc:1 + 2 * Nsc]
-    # dy = p[1 + 2 * Nsc:]
-    # delta = np.hstack([np.atleast_2d(dx).T, np.atleast_2d(dy).T])
-
-    # patch_size = int(5 * np.abs(w))
-    # shape = [2 * patch_size] * 2
-    # npatch = np.prod(shape)
-
-    # if np.any(dx > 5) or np.any(dy > 5):
-    #     return np.inf + np.zeros(len(coords) * npatch)
-
+def _chi(p, coords, img):
+    print p[:3]
     model = _generate(img.shape, coords, p)
-
     return (img - model).flatten()
 
 
-def measure_sources(img, K, w=3., padding=None):
+def logistic(x):
+    return 1.0 / (1.0 + np.exp(-x))
+
+
+def inv_logistic(x):
+    return np.log(x / (1 - x))
+
+
+def measure_sources(img, coords, w1=3., w2=5., strehl=0.5, padding=None):
     """
     Find and measure the flux of the K brightest sources in an image.
 
     ## Arguments
 
     * `img` (numpy.ndarray): The image.
-    * `K` (int): The number of sources to find.
+    * `coords` (list):
 
     ## Keyword Arguments
 
@@ -147,22 +147,22 @@ def measure_sources(img, K, w=3., padding=None):
     """
     if padding is None:
         padding = 10
-    # MAGIC: exclude sources within `3 * w` pixels of known ones.
-    coords = find_sources(img, K, 3 * w)
 
     # Fit for the fluxes.
-    p0 = np.append(np.max(img) * np.ones(K + 1), np.zeros(2 * K))
-    p0[0] = w
+    p0 = np.mean(img) * np.ones(len(coords) + 3)
+    p0[0] = w1
+    p0[1] = w2
+    p0[2] = inv_logistic(strehl)
 
-    p1 = op.leastsq(_chi, p0, args=(coords, img, w))
+    p1 = op.leastsq(_chi, p0, args=(coords, img), factor=0.1)
     p1 = p1[0]
 
-    coords[:, 0] += p1[1 + K:1 + 2 * K]
-    coords[:, 1] += p1[1 + 2 * K:1 + 3 * K]
-    coords = np.hstack((coords, np.atleast_2d(p1[1:1 + K]).T))
-    coords = coords[np.argsort(coords[:, 2])[::-1]]
+    fluxes = p1[3:]
+    inds = np.argsort(fluxes)[::-1]
+    coords = np.array(coords)[inds]
+    fluxes = fluxes[inds]
 
-    return np.abs(p1[0]), coords
+    return np.abs(p1[0]), np.abs(p1[1]), logistic(p1[2]), coords, fluxes
 
 
 def robust_statistics(x, nsig=2.5):
@@ -216,36 +216,68 @@ def estimate_noise(img, w, N=1000, padding=None, full_output=False):
     return noise
 
 
-def do_diagnostics(img, prefix, nsources=10):
+def do_diagnostics(img, prefix, sources=None, nsources=10):
     # MAGIC: risky 2.5 sigma for sigma clipping.
     sky, sky_noise = robust_statistics(img.flatten(), nsig=2.5)
     img -= sky
+    img /= sky_noise
 
     # Find and photometer the sources.
     w0 = 3
-    w, coords = measure_sources(img, nsources, w=w0)
+    if sources is None:
+        coords = find_sources(img, nsources, 3 * w0)
+    else:
+        coords = np.array([centroid_source(img, *c) for c in sources])
+
+    w1, w2, strehl, coords, fluxes = measure_sources(img, coords, w0)
 
     # Synthesize a PSF patch.
-    patch_size = int(5 * np.abs(w0))
-    shape = [2 * patch_size] * 2
-    patch = _synthesize_patch(shape, [0.5 * patch_size] * 2, 1.0, w ** 2)
-    print coords
-    print np.sum(patch), np.sum(patch ** 2)
+    # patch_size = int(5 * np.abs(w0))
+    # shape = [2 * patch_size] * 2
+    # patch = _synthesize_patch(shape, [0.5 * patch_size] * 2, 1.0, w ** 2)
+    # print coords
+    # print np.sum(patch), np.sum(patch ** 2)
 
-    patch_noise = sky_noise / np.sqrt(np.sum(patch ** 2))
+    # patch_noise = sky_noise / np.sqrt(np.sum(patch ** 2))
 
-    print("S/N : {0}".format(prefix))
-    print(coords[:, 2] / patch_noise)
+    # print("S/N : {0}".format(prefix))
+    # print(coords[:, 2] / patch_noise)
 
-    pl.figure(figsize=(5, 5))
-    delta = 1.0 / w ** 2
-    pl.imshow(img / coords[0, 2], interpolation="nearest", cmap="gray",
-            vmin=-0.2 * delta, vmax=delta)
+    delta = 1.0 / w1 ** 2
+    vrange = [-0.001 * delta, 0.01 * delta]
+
+    pl.figure(figsize=(10, 10))
+    pl.subplot(221)
+    pl.imshow(img / fluxes[0], interpolation="nearest", cmap="gray",
+            vmin=vrange[0], vmax=vrange[1])
     pl.plot(coords[:, 1], coords[:, 0], "+r")
     [pl.text(coords[i, 1], coords[i, 0], str(i)) for i in range(len(coords))]
     pl.xlim(0, 79)
     pl.ylim(0, 79)
-    pl.title(r"{0} $\sigma = {1:.2f}$".format(prefix, w))
+    pl.title(r"{0} $\sigma = {1:.2f}$".format(prefix, w1))
+
+    pl.subplot(222)
+    model = _generate(img.shape, coords,
+            np.concatenate([[w1, w2, inv_logistic(strehl)], fluxes]))
+    pl.imshow(model / fluxes[0], interpolation="nearest", cmap="gray",
+            vmin=vrange[0], vmax=vrange[1])
+    pl.plot(coords[:, 1], coords[:, 0], "+r")
+    [pl.text(coords[i, 1], coords[i, 0], str(i)) for i in range(len(coords))]
+    pl.xlim(0, 79)
+    pl.ylim(0, 79)
+    pl.title("Model")
+
+    pl.subplot(223)
+    chi = _chi(np.concatenate([[w1, w2, inv_logistic(strehl)], fluxes]),
+            coords, img).reshape(img.shape)
+    pl.imshow(chi, interpolation="nearest", cmap="gray",
+            vmin=-5, vmax=5)
+    pl.plot(coords[:, 1], coords[:, 0], "+r")
+    [pl.text(coords[i, 1], coords[i, 0], str(i)) for i in range(len(coords))]
+    pl.xlim(0, 79)
+    pl.ylim(0, 79)
+    pl.title("Chi")
+
     pl.savefig("{0}_img.pdf".format(prefix))
 
 
@@ -259,7 +291,9 @@ if __name__ == "__main__":
     zero = img.shape[0] / 2
     img = img[zero - 40:zero + 40, zero - 40:zero + 40]
 
-    do_diagnostics(img, "thresh")
+    coords = np.array([[40, 40], [33, 44], [29, 19]])
+
+    do_diagnostics(img, "thresh", sources=coords)
 
     assert 0
 
