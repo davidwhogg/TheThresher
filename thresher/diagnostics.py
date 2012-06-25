@@ -87,16 +87,11 @@ def _generate(shape, coords, p):
     result = np.zeros(shape)
     x, y = np.arange(shape[0]), np.arange(shape[1])
     norm = 1.0 / (2 * np.pi)
-    gammas = [1.0 / p[0] ** 2, 1.0 / (p[0] ** 2 + p[1] ** 2)]
-    strehl = logistic(p[2])
-    # strehl = 0.5
-    amps = [strehl, 1 - strehl]
+    gamma = 1.0 / p[0] ** 2
 
     for i, c in enumerate(coords):
         r2 = ((x - c[0]) ** 2)[:, None] + ((y - c[1]) ** 2)[None, :]
-        for j in range(2):
-            result += amps[j] * p[i + 3] * np.exp(-0.5 * r2 * gammas[j]) \
-                    * norm * gammas[j]
+        result += p[i + 1] * np.exp(-0.5 * r2 * gamma) * norm * gamma
 
     return result
 
@@ -118,20 +113,11 @@ def _get_patch(img, xc, yc, patch_size):
 
 
 def _chi(p, coords, img):
-    print p[:3]
     model = _generate(img.shape, coords, p)
     return (img - model).flatten()
 
 
-def logistic(x):
-    return 1.0 / (1.0 + np.exp(-x))
-
-
-def inv_logistic(x):
-    return np.log(x / (1 - x))
-
-
-def measure_sources(img, coords, w1=3., w2=5., strehl=0.5, padding=None):
+def measure_sources(img, coords, w=3., padding=None):
     """
     Find and measure the flux of the K brightest sources in an image.
 
@@ -149,20 +135,18 @@ def measure_sources(img, coords, w1=3., w2=5., strehl=0.5, padding=None):
         padding = 10
 
     # Fit for the fluxes.
-    p0 = np.mean(img) * np.ones(len(coords) + 3)
-    p0[0] = w1
-    p0[1] = w2
-    p0[2] = inv_logistic(strehl)
+    p0 = np.mean(img) * np.ones(len(coords) + 1)
+    p0[0] = w
 
     p1 = op.leastsq(_chi, p0, args=(coords, img), factor=0.1)
     p1 = p1[0]
 
-    fluxes = p1[3:]
+    fluxes = p1[1:]
     inds = np.argsort(fluxes)[::-1]
     coords = np.array(coords)[inds]
     fluxes = fluxes[inds]
 
-    return np.abs(p1[0]), np.abs(p1[1]), logistic(p1[2]), coords, fluxes
+    return np.abs(p1[0]), coords, fluxes
 
 
 def robust_statistics(x, nsig=2.5):
@@ -229,7 +213,7 @@ def do_diagnostics(img, prefix, sources=None, nsources=10):
     else:
         coords = np.array([centroid_source(img, *c) for c in sources])
 
-    w1, w2, strehl, coords, fluxes = measure_sources(img, coords, w0)
+    w, coords, fluxes = measure_sources(img, coords, w0)
 
     # Synthesize a PSF patch.
     # patch_size = int(5 * np.abs(w0))
@@ -243,7 +227,7 @@ def do_diagnostics(img, prefix, sources=None, nsources=10):
     # print("S/N : {0}".format(prefix))
     # print(coords[:, 2] / patch_noise)
 
-    delta = 1.0 / w1 ** 2
+    delta = 1.0 / w ** 2
     vrange = [-0.001 * delta, 0.01 * delta]
 
     pl.figure(figsize=(10, 10))
@@ -254,11 +238,11 @@ def do_diagnostics(img, prefix, sources=None, nsources=10):
     [pl.text(coords[i, 1], coords[i, 0], str(i)) for i in range(len(coords))]
     pl.xlim(0, 79)
     pl.ylim(0, 79)
-    pl.title(r"{0} $\sigma = {1:.2f}$".format(prefix, w1))
+    pl.title(r"{0} $\sigma = {1:.2f}$".format(prefix, w))
 
     pl.subplot(222)
     model = _generate(img.shape, coords,
-            np.concatenate([[w1, w2, inv_logistic(strehl)], fluxes]))
+            np.concatenate([[w], fluxes]))
     pl.imshow(model / fluxes[0], interpolation="nearest", cmap="gray",
             vmin=vrange[0], vmax=vrange[1])
     pl.plot(coords[:, 1], coords[:, 0], "+r")
@@ -268,7 +252,7 @@ def do_diagnostics(img, prefix, sources=None, nsources=10):
     pl.title("Model")
 
     pl.subplot(223)
-    chi = _chi(np.concatenate([[w1, w2, inv_logistic(strehl)], fluxes]),
+    chi = _chi(np.concatenate([[w], fluxes]),
             coords, img).reshape(img.shape)
     pl.imshow(chi, interpolation="nearest", cmap="gray",
             vmin=-5, vmax=5)
