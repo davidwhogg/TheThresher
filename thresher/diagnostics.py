@@ -29,7 +29,7 @@ def centroid_source(img, x0, y0):
     a, b, c, d, e, f = np.dot(ATAinvA, patch.flatten())
     yc = (2 * c * d + e * b) / (e * e - 4 * f * d)
     xc = (2 * b * f + e * c) / (e * e - 4 * f * d)
-    assert np.abs(xc) < 1.5 and np.abs(yc) < 1.5, \
+    assert np.abs(xc) < 1 and np.abs(yc) < 1, \
             "(x0, y0) = ({0}, {1}) and (dx, dy) = ({2}, {3})" \
             .format(x0, y0, xc, yc)
     return x0 + xc, y0 + yc
@@ -73,7 +73,7 @@ def find_sources(img, K, delta=3, padding=0):
             # Refine the centroiding.
             try:
                 res = centroid_source(img, *tmp)
-            except:
+            except Exception:
                 pass
             else:
                 coords = np.concatenate([coords, [res]], axis=0)
@@ -104,27 +104,31 @@ def _synthesize_patch(shape, coords, flux, sigma2):
     return result
 
 
-def _chi(p, coords, img):
-    sigma2 = 1.0  # p[0] ** 2
-    fluxes = p[1:]
+def _get_patch(img, xc, yc, patch_size):
+    xmn = int(xc - patch_size)
+    xmx = xmn + 2 * patch_size
+    ymn = int(yc - patch_size)
+    ymx = ymn + 2 * patch_size
+    data = img[xmn:xmx, ymn:ymx]
+    return xmn, ymn, data
 
-    patch_size = 3
-    shape = [2 * patch_size] * 2
-    npatch = np.prod(shape)
 
-    chi = np.zeros(len(coords) * npatch)
+def _chi(p, coords, img, w):
+    # Nsc = len(p[1:]) / 3
+    # dx = p[1 + Nsc:1 + 2 * Nsc]
+    # dy = p[1 + 2 * Nsc:]
+    # delta = np.hstack([np.atleast_2d(dx).T, np.atleast_2d(dy).T])
 
-    for i, (xc, yc) in enumerate(coords):
-        xmn = int(xc - patch_size)
-        xmx = xmn + 2 * patch_size
-        ymn = int(yc - patch_size)
-        ymx = ymn + 2 * patch_size
-        data = img[xmn:xmx, ymn:ymx]
-        patch = _synthesize_patch(shape, (xc - xmn, yc - ymn), fluxes[i],
-                sigma2)
-        chi[i * npatch:(i + 1) * npatch] = (data - patch).flatten()
+    # patch_size = int(5 * np.abs(w))
+    # shape = [2 * patch_size] * 2
+    # npatch = np.prod(shape)
 
-    return chi
+    # if np.any(dx > 5) or np.any(dy > 5):
+    #     return np.inf + np.zeros(len(coords) * npatch)
+
+    model = _generate(img.shape, coords, p)
+
+    return (img - model).flatten()
 
 
 def measure_sources(img, K, w=3., padding=None):
@@ -147,62 +151,198 @@ def measure_sources(img, K, w=3., padding=None):
     coords = find_sources(img, K, 3 * w)
 
     # Fit for the fluxes.
-    p0 = 100 + 400 * np.ones(K + 1)
+    p0 = np.append(np.max(img) * np.ones(K + 1), np.zeros(2 * K))
     p0[0] = w
 
-    p1 = op.leastsq(_chi, p0, args=(coords, img))
+    p1 = op.leastsq(_chi, p0, args=(coords, img, w))
     p1 = p1[0]
 
-    return p1[0] ** 2, np.hstack((coords, np.atleast_2d(p1[1:]).T))
+    coords[:, 0] += p1[1 + K:1 + 2 * K]
+    coords[:, 1] += p1[1 + 2 * K:1 + 3 * K]
+    coords = np.hstack((coords, np.atleast_2d(p1[1:1 + K]).T))
+    coords = coords[np.argsort(coords[:, 2])[::-1]]
+
+    return np.abs(p1[0]), coords
+
+
+def robust_statistics(x, nsig=2.5):
+    # Sigma-clipping.
+    fs = np.array(x)
+    mu = np.median(fs)
+    std = np.max(fs) - np.min(fs)
+    for i in range(100):
+        inrange = (fs - mu > -nsig * std) * (fs - mu < nsig * std)
+        mu = np.median(fs[inrange])
+        newstd = np.sqrt(np.mean((fs[inrange] - mu) ** 2))
+        if newstd - std == 0:
+            print i
+            break
+        std = newstd
+
+    return mu, newstd
+
+
+def estimate_noise(img, w, N=1000, padding=None, full_output=False):
+    if padding is None:
+        padding = 10
+    sigma2 = w ** 2
+
+    patch_size = int(5 * np.abs(w))
+    shape = [2 * patch_size] * 2
+
+    fs = []
+    patch = _synthesize_patch(shape, [0.5 * patch_size] * 2, 1.0, sigma2)
+    while 1:
+        xc, yc = padding + \
+                np.random.rand(2) * (np.array(img.shape) - 2 * padding)
+        xmn, ymn, data = _get_patch(img, xc, yc, patch_size)
+        chi = lambda p: (data - float(p) * patch).flatten()
+        try:
+            p1 = op.leastsq(chi, [np.mean(data)])
+        except:
+            pass
+        else:
+            fs.append(float(p1[0]))
+        if len(fs) >= N:
+            break
+
+    fs0 = np.array(fs)
+
+    mu, noise = robust_statistics(fs, nsig=2.5)
+
+    if full_output:
+        return noise, mu, fs0
+
+    return noise
+
+
+def do_diagnostics(img, prefix, nsources=10):
+    # MAGIC: risky 2.5 sigma for sigma clipping.
+    sky, sky_noise = robust_statistics(img.flatten(), nsig=2.5)
+    img -= sky
+
+    # Find and photometer the sources.
+    w0 = 3
+    w, coords = measure_sources(img, nsources, w=w0)
+
+    # Synthesize a PSF patch.
+    patch_size = int(5 * np.abs(w0))
+    shape = [2 * patch_size] * 2
+    patch = _synthesize_patch(shape, [0.5 * patch_size] * 2, 1.0, w ** 2)
+    print coords
+    print np.sum(patch), np.sum(patch ** 2)
+
+    patch_noise = sky_noise / np.sqrt(np.sum(patch ** 2))
+
+    print("S/N : {0}".format(prefix))
+    print(coords[:, 2] / patch_noise)
+
+    pl.figure(figsize=(5, 5))
+    delta = 1.0 / w ** 2
+    pl.imshow(img / coords[0, 2], interpolation="nearest", cmap="gray",
+            vmin=-0.2 * delta, vmax=delta)
+    pl.plot(coords[:, 1], coords[:, 0], "+r")
+    [pl.text(coords[i, 1], coords[i, 0], str(i)) for i in range(len(coords))]
+    pl.xlim(0, 79)
+    pl.ylim(0, 79)
+    pl.title(r"{0} $\sigma = {1:.2f}$".format(prefix, w))
+    pl.savefig("{0}_img.pdf".format(prefix))
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as pl
+    import pyfits
 
-    # Test centroid.
-    x0, y0 = 3.1, 6.2
-    img = _generate((10, 10), [[x0, y0]], [1.0, 1.0])
-    xc, yc = centroid_source(img, np.floor(x0), np.floor(y0))
-    print("Error in centroid: {0}".format((np.abs(xc - x0), np.abs(yc - y0))))
-    pl.imshow(img, interpolation="nearest", cmap="gray")
-    pl.plot(yc, xc, "+b")
-    pl.plot(y0, x0, "+r")
-    pl.savefig("centroid.png")
+    hdus = pyfits.open("test/thresh.fits")
+    img = np.array(hdus[2].data, dtype=float)
+    hdus.close()
+    zero = img.shape[0] / 2
+    img = img[zero - 40:zero + 40, zero - 40:zero + 40]
 
-    # Test full pipeline.
-    # Generate a test catalog.
-    nx, ny = 200, 300
-    K0 = 20
-    w0 = 1
-    truth = np.random.rand(K0 * 3).reshape((K0, 3))
-    truth[:, 0] *= nx
-    truth[:, 1] *= ny
-    truth[:, 2] *= 400
-    truth[:, 2] += 100
+    do_diagnostics(img, "thresh")
 
-    # Generate the image.
-    img = _generate((nx, ny), truth, np.append(w0, truth[:, 2]))
+    assert 0
 
-    # Add noise.
-    img += 1 * np.random.randn(nx * ny).reshape(img.shape)
+    img -= np.median(img)
+    thresh_pxl = img.flatten()
+    w, coords = measure_sources(img, 5, w=3.0)
 
-    # Measure the sources.
-    K = 3
-    w, coords = measure_sources(img, K, w=w0)
+    noise_thresh, mu_thresh, fs_thresh = estimate_noise(img, w, full_output=True)
+    print coords[0, 2] / noise_thresh
 
-    print "Truth:"
-    print truth[np.argsort(truth[:, 2])[::-1][:K]]
-    print "Detections:"
-    print coords
-    print "Source size:",
-    print w0, w
+    img /= coords[0, 2]
 
-    pl.figure()
+    mu = np.median(img)
+    delta = 1.0 / w ** 2
+
+    pl.figure(figsize=(10, 5))
     pl.subplot(121)
-    pl.imshow(img, interpolation="nearest", cmap="gray")
+    pl.imshow(img, interpolation="nearest", cmap="gray",
+            vmin=mu - 0.2 * delta, vmax=delta)
+    pl.plot(coords[:2, 1], coords[:2, 0], "+r")
+    pl.xlim(0, 79)
+    pl.ylim(0, 79)
+    pl.title(r"Thresher --- $\sigma = {0:.2f}$".format(w))
+
+    hdus = pyfits.open("test/tli.fits")
+    img = np.array(hdus[2].data, dtype=float)
+    hdus.close()
+    img -= np.median(img)
+    tli_pxl = img.flatten()
+    w, coords = measure_sources(img, 5, w=3.0)
+
+    noise_tli, mu_tli, fs_tli = estimate_noise(img, w, full_output=True)
+    print coords[0, 2] / noise_tli
+
+    img /= coords[0, 2]
 
     pl.subplot(122)
-    pl.imshow(_generate(img.shape, coords, np.append(w, coords[:, 2])),
-        interpolation="nearest", cmap="gray")
+    pl.imshow(img, interpolation="nearest", cmap="gray",
+            vmin=mu - 0.2 * delta, vmax=delta)
+    pl.plot(coords[:2, 1], coords[:2, 0], "+r")
+    pl.xlim(0, 79)
+    pl.ylim(0, 79)
+    pl.title(r"TLI --- $\sigma = {0:.2f}$".format(w))
 
-    pl.savefig("detect.pdf")
+    pl.savefig("diagnostics.pdf")
+
+    # Pixel histograms.
+    quantile = lambda qs, x: [x[np.argsort(x)][int(q * len(x))]
+            for q in np.atleast_1d(qs)]
+    pl.clf()
+    rng = quantile([0., 0.95], thresh_pxl)
+    pl.hist(thresh_pxl, 200, range=rng, normed=True, histtype="step")
+    thresh_sky, thresh_sky_noise = robust_statistics(thresh_pxl)
+    x = np.linspace(rng[0], rng[1], 5000)
+    pl.plot(x, np.exp(-0.5 * (x - thresh_sky) ** 2 / thresh_sky_noise ** 2) / np.sqrt(2 * np.pi * thresh_sky_noise ** 2))
+    pl.xlim(rng)
+    pl.title("Thresher Pixels")
+    pl.savefig("thresher_pxls.pdf")
+
+    pl.clf()
+    rng = quantile([0., 0.95], tli_pxl)
+    pl.hist(tli_pxl, 500, range=rng)
+    pl.xlim(rng)
+    pl.title("TLI Pixels")
+    pl.savefig("tli_pxls.pdf")
+
+    # Plot histograms.
+    pl.clf()
+    rng = 5 * noise_thresh * np.array([-1, 1])
+    n, b = np.histogram(fs_thresh, 100, normed=True, range=rng)
+    b = 0.5 * (b[1:] + b[:-1])
+    pl.plot(b, n, label="Thresher")
+    x = np.linspace(rng[0], rng[1], 5000)
+    pl.plot(x, np.exp(-0.5 * (x - mu_thresh) ** 2 / noise_thresh ** 2) / np.sqrt(2 * np.pi * noise_thresh ** 2))
+    pl.title("Thresher")
+    pl.savefig("thresh_hist.pdf")
+
+    pl.clf()
+    rng = 5 * noise_tli * np.array([-1, 1])
+    n, b = np.histogram(fs_tli, 100, normed=True, range=rng)
+    b = 0.5 * (b[1:] + b[:-1])
+    pl.plot(b, n, label="TLI")
+    x = np.linspace(rng[0], rng[1], 5000)
+    pl.plot(x, np.exp(-0.5 * (x - mu_tli) ** 2 / noise_tli ** 2) / np.sqrt(2 * np.pi * noise_tli ** 2))
+    pl.title("TLI")
+    pl.savefig("tli_hist.pdf")
