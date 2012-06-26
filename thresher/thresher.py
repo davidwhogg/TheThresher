@@ -313,6 +313,8 @@ class Scene(object):
         if top is not None:
             iml = iml[:int(top)]
         for self.pass_number in xrange(current_pass, npasses):
+            if self.pass_number > 0:
+                np.random.shuffle(iml)
             for self.img_number, self.fn in enumerate(iml):
                 if self.img_number >= current_img:
                     image = load_image(self.fn)
