@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import scipy.optimize as op
+import matplotlib.pyplot as pl
 
 
 X, Y = np.meshgrid(range(-1, 2), range(-1, 2))
@@ -159,14 +161,13 @@ def robust_statistics(x, nsig=2.5):
         mu = np.median(fs[inrange])
         newstd = np.sqrt(np.mean((fs[inrange] - mu) ** 2))
         if newstd - std == 0:
-            print i
             break
         std = newstd
 
     return mu, newstd
 
 
-def estimate_noise(img, w, N=1000, padding=None, full_output=False):
+def estimate_noise(img, w, N=10000, padding=None, full_output=False):
     if padding is None:
         padding = 10
     sigma2 = w ** 2
@@ -201,6 +202,12 @@ def estimate_noise(img, w, N=1000, padding=None, full_output=False):
 
 
 def do_diagnostics(img, prefix, sources=None, nsources=10):
+    bp = os.path.join("diagnostics", prefix)
+    try:
+        os.makedirs(bp)
+    except os.error:
+        pass
+
     # MAGIC: risky 2.5 sigma for sigma clipping.
     sky, sky_noise = robust_statistics(img.flatten(), nsig=2.5)
     img -= sky
@@ -214,18 +221,6 @@ def do_diagnostics(img, prefix, sources=None, nsources=10):
         coords = np.array([centroid_source(img, *c) for c in sources])
 
     w, coords, fluxes = measure_sources(img, coords, w0)
-
-    # Synthesize a PSF patch.
-    # patch_size = int(5 * np.abs(w0))
-    # shape = [2 * patch_size] * 2
-    # patch = _synthesize_patch(shape, [0.5 * patch_size] * 2, 1.0, w ** 2)
-    # print coords
-    # print np.sum(patch), np.sum(patch ** 2)
-
-    # patch_noise = sky_noise / np.sqrt(np.sum(patch ** 2))
-
-    # print("S/N : {0}".format(prefix))
-    # print(coords[:, 2] / patch_noise)
 
     delta = 1.0 / w ** 2
     vrange = [-0.001 * delta, 0.01 * delta]
@@ -262,11 +257,55 @@ def do_diagnostics(img, prefix, sources=None, nsources=10):
     pl.ylim(0, 79)
     pl.title("Chi")
 
-    pl.savefig("{0}_img.pdf".format(prefix))
+    pl.savefig(os.path.join(bp, "img.pdf"))
+
+    # Pixel histogram.
+    pixels = img.flatten()
+    pixels = pixels[np.argsort(pixels)]
+
+    # Quantiles function (must be presorted).
+    quantile = lambda qs, x: [x[int(q * len(x))] for q in np.atleast_1d(qs)]
+
+    pl.clf()
+    rng = quantile([0, 0.95], pixels)
+    pl.hist(pixels, 200, range=rng, normed=True, histtype="step", color="k")
+    x = np.linspace(rng[0], rng[1], 5000)
+    y = np.exp(-0.5 * x ** 2) / np.sqrt(2 * np.pi)
+    pl.plot(x, y)
+
+    pl.xlim(rng)
+    pl.title("{0} pixel histogram".format(prefix))
+    pl.savefig(os.path.join(bp, "pixel_hist.pdf"))
+
+    # Compute the Signal-to-Noise.
+    # Synthesize a PSF patch.
+    patch_size = int(5 * np.abs(w))
+    shape = [2 * patch_size] * 2
+    patch = _synthesize_patch(shape, [0.5 * patch_size] * 2, 1.0, w ** 2)
+
+    # Estimate the conversion from pixel noise to photometric noise.
+    patch_noise = 1.0 / np.sqrt(np.sum(patch ** 2))
+    print("S/N ({0}): {1}".format(prefix, fluxes / patch_noise))
+
+    # Estimate the noise using random photometry.
+    noise, mu, fs = estimate_noise(img, w, full_output=True)
+    fs = fs[np.argsort(fs)]
+    print noise, patch_noise
+    pl.clf()
+    rng = quantile([0, 0.7], fs)
+    pl.hist(fs, 100, range=rng, normed=True, histtype="step", color="k")
+    x = np.linspace(rng[0], rng[1], 5000)
+    y = np.exp(-0.5 * (x - mu) ** 2 / noise ** 2) / np.sqrt(2 * np.pi) / noise
+    pl.plot(x, y)
+    y = np.exp(-0.5 * x ** 2 / patch_noise ** 2) / np.sqrt(2 * np.pi) / patch_noise
+    pl.plot(x, y)
+
+    pl.xlim(rng)
+    pl.title("{0} photometry histogram".format(prefix))
+    pl.savefig(os.path.join(bp, "photo_hist.pdf"))
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as pl
     import pyfits
 
     hdus = pyfits.open("test/thresh.fits")
@@ -279,50 +318,12 @@ if __name__ == "__main__":
 
     do_diagnostics(img, "thresh", sources=coords)
 
-    assert 0
-
-    img -= np.median(img)
-    thresh_pxl = img.flatten()
-    w, coords = measure_sources(img, 5, w=3.0)
-
-    noise_thresh, mu_thresh, fs_thresh = estimate_noise(img, w, full_output=True)
-    print coords[0, 2] / noise_thresh
-
-    img /= coords[0, 2]
-
-    mu = np.median(img)
-    delta = 1.0 / w ** 2
-
-    pl.figure(figsize=(10, 5))
-    pl.subplot(121)
-    pl.imshow(img, interpolation="nearest", cmap="gray",
-            vmin=mu - 0.2 * delta, vmax=delta)
-    pl.plot(coords[:2, 1], coords[:2, 0], "+r")
-    pl.xlim(0, 79)
-    pl.ylim(0, 79)
-    pl.title(r"Thresher --- $\sigma = {0:.2f}$".format(w))
-
     hdus = pyfits.open("test/tli.fits")
     img = np.array(hdus[2].data, dtype=float)
     hdus.close()
-    img -= np.median(img)
-    tli_pxl = img.flatten()
-    w, coords = measure_sources(img, 5, w=3.0)
+    do_diagnostics(img, "tli", sources=coords)
 
-    noise_tli, mu_tli, fs_tli = estimate_noise(img, w, full_output=True)
-    print coords[0, 2] / noise_tli
-
-    img /= coords[0, 2]
-
-    pl.subplot(122)
-    pl.imshow(img, interpolation="nearest", cmap="gray",
-            vmin=mu - 0.2 * delta, vmax=delta)
-    pl.plot(coords[:2, 1], coords[:2, 0], "+r")
-    pl.xlim(0, 79)
-    pl.ylim(0, 79)
-    pl.title(r"TLI --- $\sigma = {0:.2f}$".format(w))
-
-    pl.savefig("diagnostics.pdf")
+    assert 0
 
     # Pixel histograms.
     quantile = lambda qs, x: [x[np.argsort(x)][int(q * len(x))]
