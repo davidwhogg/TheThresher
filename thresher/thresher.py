@@ -33,6 +33,27 @@ class Scene(object):
     A `Scene` object describes and learns the "true" image from a lucky
     imaging data stream.
 
+    ## Arguments
+
+    * `imgglob` (str): The filesystem glob that the data files will match
+      (e.g. `/path/to/data_*.fits`).
+
+    ## Keyword Arguments
+
+    * `outdir` (str): The path to the directory where the output files will
+      be written. This defaults to `out` in the current working directory.
+      The directory will be created if needed.
+    * `psf_hw` (int): The half width of the PSF object.
+    * `size` (int): The size of one side of the (square) "scene" to infer.
+      This currently needs to be provided but it should eventually default
+      to the full size of the data.
+    * `sky` (float): A constant piston to apply to every observation.
+    * `kernel` (numpy.ndarray): The small (diffraction-limited) PSF to use
+      for the light deconvolution.
+    * `psfreg` (float): The strength of the PSF "sum-to-one" regularization.
+    * `sceneL2` (float): The strength of the L2 regularization to apply to
+      the scene.
+
     """
     def __init__(self, imgglob, outdir="", psf_hw=13, size=None, sky=0.,
             kernel=None, psfreg=100., sceneL2=1. / 64.):
@@ -74,6 +95,13 @@ class Scene(object):
             self.kernel = kernel
 
     def setup(self):
+        """
+        Do the initial setup for a Thresher run. This is not needed for a
+        TLI run (hence why it is not in `__init__`). It first calculates the
+        initial guess for the scene (using TLI) and then figures out the
+        index gymnastics needed for unravelling the scene and PSF.
+
+        """
         # Run lucky imaging. MAGIC: co-add the top 1 percent.
         images, ranks, self.coords, scene = self.run_tli(self.image_list,
                 size=self.size + 2 * self.psf_hw, top_percent=1)
@@ -92,9 +120,27 @@ class Scene(object):
         """
         Run traditional lucky imaging on a stream of data.
 
+        ## Arguments
+
+        * `image_list` (list): The list of filenames for the images which
+          will be ranked and combined using TLI.
+
         ## Keyword Arguments
 
-        * `top` (int): How many images should be coadded.
+        * `size` (int): The size of the scene to be determined.
+        * `top` (int): How many images should be coadded?
+        * `top_percent` (float): An alternative notation for `top` instead
+          specified by a percentage.
+
+        ## Returns
+
+        * `fns` (list): The filenames ordered from best to worst as ranked
+          by TLI.
+        * `ranks` (list): The value of the ranking scalar corresponding to
+          the images listed in `fns`.
+        * `centers` (list): The coordinates of the centers of each image as
+          determined by centroiding.
+        * `coadd` (numpy.ndarray): The resulting co-added image.
 
         """
         Ndata = len(image_list)
@@ -148,6 +194,26 @@ class Scene(object):
         return fns, ranks, centers, final
 
     def do_update(self, fn, alpha, median=True, nn=False):
+        """
+        Do a single stochastic gradient update using the image in a
+        given file and learning rate.
+
+        ## Arguments
+
+        * `fn` (str): The filename of the image to be used.
+        * `alpha` (float): The learning rate.
+
+        ## Keyword Arguments
+
+        * `median` (bool): Subtract the median of the scene?
+        * `nn` (bool): Project onto the non-negative plane?
+
+        ## Returns
+
+        * `data` (numpy.ndarray): The centered and cropped data image used
+          for this update.
+
+        """
         image = utils.load_image(fn)
         coords, data, mask = utils.centroid_image(image, self.scene, self.size,
                         coords=self.coords.get(self.fn, None))
@@ -168,48 +234,61 @@ class Scene(object):
             self.scene -= np.median(self.scene)
         if nn:
             self.scene[self.scene < 0] = 0.0
+
         return data
 
-    def run_inference(self, basepath=None, npasses=5,
-            subtract_median=False, use_nn=True, top=None):
+    def run_inference(self, npasses=5, median=False, nn=True, top=None,
+            thin=10):
         """
-        Run the full inference on the dataset.
+        Thresh the data.
 
         ## Keyword Arguments
 
-        * `npasses` (int): The number of passes to run.
-        * `current_pass` (int): The pass number to start at. This is used
-          for restarting.
-        * `current_img` (int): The image number to start at on the first
-          pass through the data. This is used for restarting.
+        * `npasses` (int): The number of times to run through the data.
+        * `median` (bool): Subtract the median of the scene at each update.
+        * `nn` (bool): Constrain the inferred scene to be non-negative.
+        * `top` (int): Only consider the top few images.
+        * `thin` (int): Only save the state every few images.
 
         """
-        if basepath is not None:
-            self.basepath = basepath
-
         N = len([i for i in self.image_list])
 
         iml = self.image_list
         if top is not None:
             iml = iml[:int(top)]
-        for self.pass_number in xrange(npasses):
-            if self.pass_number > 0:
+        for pass_number in xrange(npasses):
+            if pass_number > 0:
                 np.random.shuffle(iml)
-            for self.img_number, self.fn in enumerate(iml):
+            for img_number, fn in enumerate(iml):
                 # If it's the first pass, `alpha` should decay and we
                 # should use _non-negative_ optimization.
                 if self.pass_number == 0:
-                    alpha = min(2. / (1 + self.img_number), 0.25)
-                    nn = use_nn  # True
+                    alpha = min(2. / (1 + img_number), 0.25)
+                    use_nn = nn
                 else:
                     alpha = 2. / N  # MAGIC: 2.
-                    nn = False
+                    use_nn = False
 
-                data = self.do_update(self.fn, alpha, median=subtract_median,
-                        nn=nn)
-                self.save(data)
+                data = self.do_update(fn, alpha, median=median, nn=use_nn)
+
+                # Save the current state of the scene.
+                if img_number % thin == 0:
+                    self.save(fn, pass_number, img_number, data)
 
     def get_psf_matrix(self, L2=True):
+        """
+        Get the unraveled matrix for the current PSF.
+
+        ## Keyword Arguments
+
+        * `L2` (bool): Should the rows for the L2 norm be included?
+
+        ## Returns
+
+        * `psf_matrix` (scipy.sparse.csr_matrix): The sparse, unraveled PSF
+          matrix.
+
+        """
         S = len(self.scene)
         P = self.psf_hw
 
@@ -311,8 +390,8 @@ class Scene(object):
 
         return dlds
 
-    def save(self, data):
-        _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
+    def save(self, fn, pass_number, img_number, data):
+        _id = "{0:d}-{1:08}".format(pass_number, img_number)
         outfn = os.path.join(self.outdir, _id + ".fits")
 
         hdus = [pyfits.PrimaryHDU(data),
@@ -321,10 +400,10 @@ class Scene(object):
                 pyfits.ImageHDU(self.psf),
                 pyfits.ImageHDU(self.kernel)]
 
-        hdus[0].header.update("datafn", self.fn)
+        hdus[0].header.update("datafn", fn)
         hdus[0].header.update("size", self.size)
-        hdus[0].header.update("pass", self.pass_number)
-        hdus[0].header.update("image", self.img_number)
+        hdus[0].header.update("pass", pass_number)
+        hdus[0].header.update("image", img_number)
         hdus[0].header.update("sky", self.inferred_sky)
         hdus[1].header.update("status", "old")
         hdus[2].header.update("status", "new")
