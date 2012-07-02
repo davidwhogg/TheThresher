@@ -45,7 +45,7 @@ if __name__ == '__main__':
             help="The half width of the inferred PSF image.")
     parser.add_argument("--psfreg", type=float, default=1.,
             help="The strength of the sum-to-one regularization on the PSF.")
-    parser.add_argument("--sceneL2", type=float, default=0.1,
+    parser.add_argument("--sceneL2", type=float, default=0.0,
             help="The strength of the L2 regularization on the scene.")
     parser.add_argument("--sky", type=float, default=0.0,
             help="The sky level of the images")
@@ -91,7 +91,11 @@ if __name__ == '__main__':
     scene = thresher.Scene(args.glob, outdir, psf_hw=args.psf_hw,
             size=args.size, sky=args.sky, psfreg=args.psfreg,
             sceneL2=args.sceneL2)
+
+    # Compute the TLI ordering.
     scene.setup()
+
+    # Thresh like mad.
     scene.run_inference(npasses=args.npasses,
             subtract_median=not args.no_median,
             use_nn=args.use_non_neg, top=args.top, simple=args.simple)

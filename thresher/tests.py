@@ -11,6 +11,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 
 import thresher
+import utils
 
 
 class Tests(object):
@@ -26,20 +27,20 @@ class Tests(object):
     def test_indexing_basic(self):
         for x in xrange(self.Nx):
             for y in xrange(self.Ny):
-                i = thresher.xy2index(self.shape, x, y)
-                assert (x, y) == thresher.index2xy(self.shape, i)
-                assert i == thresher.xy2index(self.shape,
-                        *thresher.index2xy(self.shape, i))
+                i = utils.xy2index(self.shape, x, y)
+                assert (x, y) == utils.index2xy(self.shape, i)
+                assert i == utils.xy2index(self.shape,
+                        *utils.index2xy(self.shape, i))
 
     def test_indexing_grid(self):
         xgrid = np.zeros(self.shape) + np.arange(self.Nx)[:, None]
         ygrid = np.zeros(self.shape) + np.arange(self.Ny)[None, :]
 
-        i1 = thresher.xy2index(self.shape, xgrid, ygrid).astype(int)
+        i1 = utils.xy2index(self.shape, xgrid, ygrid).astype(int)
         i2 = np.arange(self.Nx * self.Ny).reshape(self.shape)
         assert np.all(i1 == i2)
 
-        x1, y1 = thresher.index2xy(self.shape, i1)
+        x1, y1 = utils.index2xy(self.shape, i1)
         assert np.all(x1 == xgrid) and np.all(y1 == ygrid)
 
     def test_unravel_scene(self):
@@ -49,7 +50,7 @@ class Tests(object):
 
         """
         S, P = 4, 1
-        unraveled = thresher.unravel_scene(S, P)
+        unraveled = utils.unravel_scene(S, P)
 
         # Calculate the brute force unraveled scene.
         brute = np.array([[ 0,  1,  2,  4,  5,  6,  8,  9, 10],
@@ -66,7 +67,7 @@ class Tests(object):
 
         """
         S, P = 4, 1
-        rows, cols = thresher.unravel_psf(S, P)
+        rows, cols = utils.unravel_psf(S, P)
 
         # Calculate the brute force unraveled scene.
         b_cols = np.array([ 0,  1,  2,  4,  5,  6,  8,  9, 10,
@@ -167,7 +168,7 @@ class Tests(object):
         convolution = thresher.convolve(scene, psf, mode="valid")
 
         # Do the matrix operation.
-        M = thresher.unravel_scene(len(scene), 1)
+        M = utils.unravel_scene(len(scene), 1)
         matrix = np.dot(scene.flatten()[M], psf.flatten()[::-1]) \
                 .reshape(convolution.shape)
 
@@ -198,16 +199,11 @@ class Tests(object):
 
         # Run the centroid.
         size = 24
-        coords, data = thresher.centroid_image(img, scene, size)
+        coords, data, mask = utils.centroid_image(img, scene, size)
 
         # Make sure that it gets the right coordinates.
         truth = centers[np.argmax(amps)]
         assert np.all(coords[::-1] == truth)
-
-        # Make sure that the trimming worked.
-        np.testing.assert_allclose(data,
-                img[truth[1] - size / 2:truth[1] + size / 2,
-                    truth[0] - size / 2:truth[0] + size / 2])
 
 
 if __name__ == "__main__":
