@@ -12,25 +12,27 @@ import pyfits
 #
 # Image/filesystem utilities
 #
-def load_image(fn):
+def load_image(fn, hdu=0, dtype=float):
     """
     Get the image data from a FITS file.
 
     """
     logging.info("Loading data file: {0}".format(fn))
     f = pyfits.open(fn)
-    data = np.array(f[0].data, dtype=float)
+    data = np.array(f[hdu].data, dtype=dtype)
     f.close()
     return data
 
 
-def centroid_image(image, scene, size, coords=None):
+def centroid_image(image, size, scene=None, coords=None):
     """
     Centroid an image based on the current scene by projecting and
     convolving.
 
     """
     if coords is None:
+        assert scene is not None
+
         # Full 2D convolution?
         # convolved = convolve(image, scene, mode="valid")
         # center = np.unravel_index(convolved.argmax(), convolved.shape)

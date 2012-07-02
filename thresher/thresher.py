@@ -164,7 +164,7 @@ class Scene(object):
                 r = np.sqrt(x[:, None] + x[None, :])
                 scene = 0.5 * np.exp(-0.5 * r) / np.pi
 
-            center, result, mask = utils.centroid_image(img, scene, size)
+            center, result, mask = utils.centroid_image(img, size, scene=scene)
             centers[fn] = center
             stack[n] = result
             ranks[fn] = (n, float(result[size / 2, size / 2]))
@@ -193,7 +193,8 @@ class Scene(object):
 
         return fns, ranks, centers, final
 
-    def do_update(self, fn, alpha, median=True, nn=False):
+    def do_update(self, fn, alpha, maskfn=None, maskhdu=0, median=True,
+            nn=False):
         """
         Do a single stochastic gradient update using the image in a
         given file and learning rate.
@@ -205,6 +206,11 @@ class Scene(object):
 
         ## Keyword Arguments
 
+        * `maskfn` (str): The path to the mask file. By default, we assume
+          that there are no masked pixels.
+        * `maskhdu` (int): The HDU number for the mask. If `maskfn` is not
+          provided and `maskhdu` is not 0, the mask is expected in a non-zero
+          HDU of `fn`.
         * `median` (bool): Subtract the median of the scene?
         * `nn` (bool): Project onto the non-negative plane?
 
@@ -215,8 +221,26 @@ class Scene(object):
 
         """
         image = utils.load_image(fn)
-        coords, data, mask = utils.centroid_image(image, self.scene, self.size,
-                        coords=self.coords.get(self.fn, None))
+
+        # Load the mask if it's provided.
+        if maskfn is not None or maskhdu > 0:
+            if maskfn is None:
+                maskfn = fn
+            mask = utils.load_image(maskfn, hdu=maskhdu, dtype=bool)
+        else:
+            mask = np.ones_like(image)
+
+        # Center the data.
+        coords, data, m = utils.centroid_image(image, self.size,
+                scene=self.scene, coords=self.coords.get(fn, None))
+
+        # Center the mask.
+        c0, mask, m = utils.centroid_image(mask, self.size, coords=coords)
+
+        # Combine the data mask with the offset mask.
+        mask *= mask
+        mask *= ~np.isnan(data)
+        mask = np.array(mask, dtype=bool)
 
         # Piston the data for numerical stability.
         data += self.sky - np.min(data)
@@ -224,7 +248,7 @@ class Scene(object):
         # Do the inference.
         self.old_scene = np.array(self.scene)
         self.psf, self.dlds = _worker(self, data)
-        self.scene = self.scene + alpha * self.dlds
+        self.scene[mask] += alpha * self.dlds[mask]
 
         # WTF?!?
         gc.collect()

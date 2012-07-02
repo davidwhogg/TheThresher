@@ -97,5 +97,5 @@ if __name__ == '__main__':
 
     # Thresh like mad.
     scene.run_inference(npasses=args.npasses,
-            subtract_median=not args.no_median,
-            use_nn=args.use_non_neg, top=args.top, simple=args.simple)
+            median=not args.no_median,
+            nn=args.use_non_neg, top=args.top)
