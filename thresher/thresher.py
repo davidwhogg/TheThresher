@@ -319,11 +319,21 @@ class Scene(object):
         return psf_matrix
 
     @utils.timer
-    def infer_psf(self, data, useL2=False):
+    def infer_psf(self, data):
         """
-        Take data and a current belief about the scene; infer the psf for
-        this image given the scene.  This code infers a sky level
-        simultaneously.  That might seem like a detail, but it matters.
+        Take data and a current belief about the scene; infer the PSF for
+        this image given the scene. This code infers a sky level
+        simultaneously. That might seem like a detail, but it matters. This
+        method uses the sparse non-negative least-squares algorithm from
+        scipy.
+
+        ## Arguments
+
+        * `data` (numpy.ndarray): The image data.
+
+        ## Returns
+
+        * `psf` (numpy.ndarray): The inferred 2D PSF image.
 
         """
         # Sort out the dimensions.
@@ -366,6 +376,21 @@ class Scene(object):
         Take data and a current belief about the PSF; infer the scene for
         this image given the PSF.
 
+        ## Arguments
+
+        * `data` (numpy.ndarray): The data.
+
+        ## Returns
+
+        * `new_scene` (numpy.ndarray): The scene implied by this particular
+          data alone.
+
+        ## Note
+
+        This method has been deprecated by `get_dlds` and the proper
+        stochastic gradient update. I'm keeping this here for now just in
+        case.
+
         """
         # Infer scene and return
         data_vector = np.append(data.flatten(), np.zeros(self.scene.size))
@@ -379,7 +404,16 @@ class Scene(object):
     def get_dlds(self, data):
         """
         Take data and a current belief about the PSF; compute the gradient of
-        log-likelihood wrt scene.
+        log-likelihood with respect to the scene.
+
+        ## Arguments
+
+        * `data` (numpy.ndarray): The data.
+
+        ## Returns
+
+        * `dlds` (numpy.ndarray): The gradient of the likelihood function
+          with respect to the scene parameters.
 
         """
         psf_matrix = self.get_psf_matrix(L2=False)
