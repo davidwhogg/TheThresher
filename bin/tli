@@ -5,6 +5,7 @@ This file is part of The Thresher.
 
 import os
 import sys
+import glob
 import logging
 import numpy as np
 import pyfits
@@ -28,19 +29,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("glob", type=str,
             help="The glob that the imaging data should satisfy")
-    parser.add_argument("size", type=int,
-            help="The size of the co-added scene.")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The output file.")
     parser.add_argument("-t", "--top", type=int, nargs='+', default=None,
             help="Co-add the top N images")
+    parser.add_argument("--no_shift", action="store_true",
+            help="Assume that the images are properly registered so don't "
+                + "shift and add.")
     parser.add_argument("--log", type=str, default=None,
             help="The filename for the log.")
     parser.add_argument("-v", "--verbose", action="store_true",
             help="Enable verbose logging.")
     args = parser.parse_args()
-
-    assert args.size % 2 == 0, "The scene size must be even"
 
     if args.output is None:
         outfn = "lucky-trad.fits"
@@ -65,20 +65,23 @@ if __name__ == '__main__':
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
     # Run the pipeline.
-    scene = thresher.Scene(args.glob, size=args.size)
-    fns, ranks, final = scene.run_lucky(do_coadd=True, top=args.top)
+    image_list = glob.glob(args.glob)
+    fns, ranks, centers, final = thresher.run_tli(image_list, top=args.top,
+            shift=not args.no_shift)
     fns = [os.path.split(fn)[-1] for fn in fns]
 
     col1 = pyfits.Column(name="filename", format="30A", array=np.array(fns))
     col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
-    cols = pyfits.ColDefs([col1, col2])
+    col3 = pyfits.Column(name="x0", format="E", array=centers[0])
+    col4 = pyfits.Column(name="y0", format="E", array=centers[1])
+    cols = pyfits.ColDefs([col1, col2, col3, col4])
     table_hdu = pyfits.new_table(cols)
     image_hdu = pyfits.PrimaryHDU(final[-1])
     image_hdu.header.update("cli", " ".join(sys.argv))
     hdus = [image_hdu]
     if args.top is not None:
-        if len(args.top) > 1:
-            for i, t in enumerate(args.top[:-1]):
+        if len(args.top) > 0:
+            for i, t in enumerate(args.top):
                 hdus += [pyfits.ImageHDU(final[i])]
                 hdus[-1].header.update("number", t)
     hdus += [table_hdu]
