@@ -1,70 +1,153 @@
-__all__ = ["s2n", "resolution", "dfm_time"]
+__all__ = ["load_image", "centroid_image", "unravel_scene", "unravel_psf",
+           "timer"]
 
 import time
 import logging
+
 import numpy as np
+from scipy.signal import fftconvolve as convolve
+import pyfits
 
 
-def _measure_counts(img, pos, diam):
+#
+# Image/filesystem utilities
+#
+def load_image(fn, hdu=0, dtype=float):
     """
-    Measure the counts within an annulus at a particular position.
+    Get the image data from a FITS file.
 
     """
-    ny, nx = img.shape
-    pos_x, pos_y = np.meshgrid(np.arange(nx), np.arange(ny))
-    r = np.sqrt((pos_x - pos[0]) ** 2 + (pos_y - pos[1]) ** 2)
-    m = r < diam
-
-    # Hack: I'm weighting the counts by how many pixels are being included.
-    # My intuition is that this should roughly deal with edge effects.
-    return np.sum(img[pos_y[m], pos_x[m]]) / np.sum(m)
+    logging.info("Loading data file: {0}".format(fn))
+    f = pyfits.open(fn)
+    data = np.array(f[hdu].data, dtype=dtype)
+    f.close()
+    return data
 
 
-def s2n(img, pos, diam=5, nnoise=100):
+def centroid_image(image, size, scene=None, coords=None):
     """
-    Approximate the S/N for an image.
+    Centroid an image based on the current scene by projecting and
+    convolving.
+
+    """
+    if coords is None:
+        assert scene is not None
+
+        # Full 2D convolution?
+        # convolved = convolve(image, scene, mode="valid")
+        # center = np.unravel_index(convolved.argmax(), convolved.shape)
+
+        # Projected convolutions.
+        x0 = np.argmax(convolve(np.sum(image, axis=1), np.sum(scene, axis=1),
+            mode="valid"))
+        y0 = np.argmax(convolve(np.sum(image, axis=0), np.sum(scene, axis=0),
+            mode="valid"))
+        center = (x0, y0)
+
+        # Deal with shapes.
+        s_dim = (np.array(scene.shape) - 1) / 2
+        center = np.array(center) + s_dim
+    else:
+        center = np.array(coords)
+
+    logging.info("Got image center: {0}".format(center))
+
+    # Deal with the edges of the images.
+    mn = center - size / 2
+    mn_r = np.zeros_like(center)
+    mn_r[mn < 0] = -mn[mn < 0]
+    mn[mn < 0] = 0
+
+    mx = center + size / 2
+    m = mx > np.array(image.shape)
+    mx_r = size * np.ones_like(center)
+    mx_r[m] -= mx[m] - np.array(image.shape)[m]
+    mx[m] = np.array(image.shape)[m]
+
+    mask = np.zeros((size, size), dtype=int)
+    mask[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = 1
+
+    # Build the result.
+    result = np.zeros((size, size))
+    result[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = image[mn[0]:mx[0], mn[1]:mx[1]]
+
+    return center, result, mask
+
+
+#
+# Index gymnastics
+#
+def xy2index(shape, x, y):
+    """
+    Go from x,y position in a 2-d numpy array to one-d index in the
+    flattened 1-d array.
+
+    """
+    return (x * shape[1] + y)
+
+
+def index2xy(shape, i):
+    """Inverse of `xy2index()`."""
+    return ((i / shape[1]), (i % shape[1]))
+
+
+def unravel_scene(S, P):
+    """
+    Unravel the scene object to prepare for the least squares problem.
 
     ## Arguments
 
-    * `img` (numpy.ndarray): The 2D image to estimate the S/N for.
-    * `pos` (tuple): The coordinates of the "signal".
-
-    ## Keyword Arguments
-
-    * `diam` (float): The diameter of the annulus within which the number of
-      counts will be measured.
-    * `nnoise` (int): The number of "noise" estimates to make.
+    * `scene` (numpy.ndarray): The 2-D scene object.
+    * `P` (int): The half-width of the PSF object.
 
     """
-    ny, nx = img.shape
-    median = np.median(img)
+    # Work out all the dimensions first.
+    D = S - 2 * P
 
-    # Get the counts at the source as an approximation of the "signal".
-    s_counts = _measure_counts(img, pos, diam) - median
+    psf_shape = 2 * P + 1
+    psf_size = psf_shape ** 2
 
-    # Estimate the noise.
-    ncounts = np.zeros(nnoise)
-    for i in range(nnoise):
-        r = 0
-        while r < diam:
-            p0 = (np.random.randint(nx), np.random.randint(ny))
-            r = np.sqrt((pos[0] - p0[0]) ** 2 + (pos[1] - p0[1]) ** 2)
-        ncounts[i] = _measure_counts(img, p0, diam) - median
+    data_shape = (D, D)
+    data_size = D ** 2
 
-    return s_counts / np.sqrt(np.var(ncounts))
+    # The layout of the scene.
+    scene = np.arange(S ** 2).reshape((S, S))
+
+    # Build the output array.
+    result = np.empty((data_size, psf_size), dtype=int)
+
+    # Loop over the valid data region.
+    for k in xrange(data_size):
+        dx, dy = index2xy(data_shape, k)
+        grid = np.meshgrid(dy + np.arange(psf_shape),
+                           dx + np.arange(psf_shape))[::-1]
+        result[k, :] = scene[grid].flatten()
+
+    return result
 
 
-def resolution():
-    pass
+def unravel_psf(S, P):
+    D = S - 2 * P
+    data_size = D ** 2
+    psf_size = (2 * P + 1) ** 2
+
+    psfX, psfY = index2xy((2 * P + 1,) * 2, np.arange(psf_size))
+
+    rows = np.zeros(data_size * psf_size, dtype=int)
+    cols = np.zeros_like(rows)
+
+    for k in range(data_size):
+        dx, dy = index2xy((D, D), k)
+        s = slice(k * psf_size, (k + 1) * psf_size)
+        rows[s] = k
+        cols[s] = xy2index((S, S), psfX + dx, psfY + dy)
+
+    return rows, cols
 
 
-def dfm_time(f, lf=None):
+def timer(f, lf=None):
     """
     A decorator used for some simple profiling.
-
-    # Keyword Arguments
-
-    * `lf` (callable): The logging function to use.
 
     """
     if lf is None:
@@ -77,27 +160,9 @@ def dfm_time(f, lf=None):
         txt = "{0} took {1} seconds".format(f.__name__, dt)
         lf(txt)
         return r
+
     return _func
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as pl
-
-    nx, ny = 50, 100
-    pos = (20.3, 75.1)
-
-    pos_x, pos_y = np.meshgrid(np.arange(nx), np.arange(ny))
-    r = np.sqrt((pos_x - pos[0]) ** 2 + (pos_y - pos[1]) ** 2)
-
-    w = 3
-    s = 1000.
-    img = s * np.exp(-0.5 * r ** 2 / w ** 2) / (2 * np.pi) / w ** 2
-
-    # Add noise.
-    n = 1.
-    img += n * np.random.randn(img.size).reshape(img.shape)
-
-    print s2n(img, pos)
-
-    pl.imshow(img, interpolation="nearest")
-    pl.savefig("sn.png")
+    pass

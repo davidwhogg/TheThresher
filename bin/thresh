@@ -35,6 +35,8 @@ if __name__ == '__main__':
             help="The directory for the output files.")
     parser.add_argument("-m", "--no_median", action="store_true",
             help="Subtract the median of the scene?")
+    parser.add_argument("--simple", action="store_true",
+            help="Use stochastic gradient.")
     parser.add_argument("--use_non_neg", action="store_true",
             help="Use non-negativity?")
     parser.add_argument("--size", type=int, default=None,
@@ -43,12 +45,14 @@ if __name__ == '__main__':
             help="The half width of the inferred PSF image.")
     parser.add_argument("--psfreg", type=float, default=1.,
             help="The strength of the sum-to-one regularization on the PSF.")
-    parser.add_argument("--sceneL2", type=float, default=0.1,
+    parser.add_argument("--sceneL2", type=float, default=0.0,
             help="The strength of the L2 regularization on the scene.")
     parser.add_argument("--sky", type=float, default=0.0,
             help="The sky level of the images")
     parser.add_argument("-n", "--npasses", type=int, default=1,
             help="The number of inference passes to run")
+    parser.add_argument("-t", "--top", type=int, default=None,
+            help="Only use the top N images as defined by the TLI ordering.")
     parser.add_argument("--log", type=str, default=None,
             help="The filename for the log.")
     parser.add_argument("-v", "--verbose", action="store_true",
@@ -87,7 +91,11 @@ if __name__ == '__main__':
     scene = thresher.Scene(args.glob, outdir, psf_hw=args.psf_hw,
             size=args.size, sky=args.sky, psfreg=args.psfreg,
             sceneL2=args.sceneL2)
+
+    # Compute the TLI ordering.
     scene.setup()
+
+    # Thresh like mad.
     scene.run_inference(npasses=args.npasses,
-            subtract_median=not args.no_median,
-            use_nn=args.use_non_neg)
+            median=not args.no_median,
+            nn=args.use_non_neg, top=args.top)

@@ -3,10 +3,9 @@ This file is part of The Thresher.
 
 """
 
-__all__ = ["Scene", "load_image", "centroid_image"]
+__all__ = ["Scene"]
 
 import os
-import logging
 import gc
 import glob
 
@@ -19,143 +18,14 @@ import scipy.optimize as op
 
 import pyfits
 
-from utils import dfm_time
-
-
-def xy2index(shape, x, y):
-    """
-    Go from x,y position in a 2-d numpy array to one-d index in the
-    flattened 1-d array.
-
-    """
-    return (x * shape[1] + y)
-
-
-def index2xy(shape, i):
-    """Inverse of `xy2index()`."""
-    return ((i / shape[1]), (i % shape[1]))
-
-
-def unravel_scene(S, P):
-    """
-    Unravel the scene object to prepare for the least squares problem.
-
-    ## Arguments
-
-    * `scene` (numpy.ndarray): The 2-D scene object.
-    * `P` (int): The half-width of the PSF object.
-
-    """
-    # Work out all the dimensions first.
-    D = S - 2 * P
-
-    psf_shape = 2 * P + 1
-    psf_size = psf_shape ** 2
-
-    data_shape = (D, D)
-    data_size = D ** 2
-
-    # The layout of the scene.
-    scene = np.arange(S ** 2).reshape((S, S))
-
-    # Build the output array.
-    result = np.empty((data_size, psf_size), dtype=int)
-
-    # Loop over the valid data region.
-    for k in xrange(data_size):
-        dx, dy = index2xy(data_shape, k)
-        grid = np.meshgrid(dy + np.arange(psf_shape),
-                           dx + np.arange(psf_shape))[::-1]
-        result[k, :] = scene[grid].flatten()
-
-    return result
-
-
-def unravel_psf(S, P):
-    D = S - 2 * P
-    data_size = D ** 2
-    scene_size = S ** 2
-    psf_size = (2 * P + 1) ** 2
-
-    psfX, psfY = index2xy((2 * P + 1,) * 2, np.arange(psf_size))
-
-    rows = np.zeros(data_size * psf_size, dtype=int)
-    cols = np.zeros_like(rows)
-
-    for k in range(data_size):
-        dx, dy = index2xy((D, D), k)
-        s = slice(k * psf_size, (k + 1) * psf_size)
-        rows[s] = k
-        cols[s] = xy2index((S, S), psfX + dx, psfY + dy)
-
-    # add entries for old-scene-based regularization
-    rows = np.append(rows, np.arange(data_size, data_size + scene_size))
-    cols = np.append(cols, np.arange(scene_size))
-
-    return rows, cols
-
-
-def load_image(fn):
-    """
-    Get the image data from a FITS file.
-
-    """
-    logging.info("Loading data file: {0}".format(fn))
-    f = pyfits.open(fn)
-    data = np.array(f[0].data, dtype=float)
-    f.close()
-    return data
-
-
-def centroid_image(image, scene, size, coords=None):
-    """
-    Centroid an image based on the current scene by projecting and
-    convolving.
-
-    """
-    if coords is None:
-        convolved = convolve(image, scene, mode="valid")
-        center = np.unravel_index(convolved.argmax(), convolved.shape)
-
-        # Deal with shapes.
-        s_dim = (np.array(scene.shape) - 1) / 2
-        center = np.array(center) + s_dim
-    else:
-        center = np.array(coords)
-
-    logging.info("Got image center: {0}".format(center))
-
-    # Deal with the edges of the images.
-    mn = center - size / 2
-    mn_r = np.zeros_like(center)
-    mn_r[mn < 0] = -mn[mn < 0]
-    mn[mn < 0] = 0
-
-    mx = center + size / 2
-    delta = mx - np.array(image.shape)
-    m = mx > np.array(image.shape)
-    mx_r = size * np.ones_like(center)
-    mx_r[m] -= mx[m] - np.array(image.shape)[m]
-    mx[m] = np.array(image.shape)[m]
-
-    # Build the result.
-    result = np.zeros((size, size))
-    result[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = image[mn[0]:mx[0], mn[1]:mx[1]]
-
-    return center, result
-
-
-def trim_image(image, size):
-    xmin = int(0.5 * (image.shape[0] - size))
-    ymin = int(0.5 * (image.shape[0] - size))
-    return image[xmin:xmin + size, ymin:ymin + size]
+import utils
 
 
 def _worker(scene, data):
     # Do the inference.
-    psf = scene._infer_psf(data)
-    new_scene = scene._infer_scene(data)
-    return psf, new_scene
+    psf = scene.infer_psf(data)
+    dlds = scene.get_dlds(data)
+    return psf, dlds
 
 
 class Scene(object):
@@ -163,10 +33,30 @@ class Scene(object):
     A `Scene` object describes and learns the "true" image from a lucky
     imaging data stream.
 
+    ## Arguments
+
+    * `imgglob` (str): The filesystem glob that the data files will match
+      (e.g. `/path/to/data_*.fits`).
+
+    ## Keyword Arguments
+
+    * `outdir` (str): The path to the directory where the output files will
+      be written. This defaults to `out` in the current working directory.
+      The directory will be created if needed.
+    * `psf_hw` (int): The half width of the PSF object.
+    * `size` (int): The size of one side of the (square) "scene" to infer.
+      This currently needs to be provided but it should eventually default
+      to the full size of the data.
+    * `sky` (float): A constant piston to apply to every observation.
+    * `kernel` (numpy.ndarray): The small (diffraction-limited) PSF to use
+      for the light deconvolution.
+    * `psfreg` (float): The strength of the PSF "sum-to-one" regularization.
+    * `sceneL2` (float): The strength of the L2 regularization to apply to
+      the scene.
+
     """
     def __init__(self, imgglob, outdir="", psf_hw=13, size=None, sky=0.,
             kernel=None, psfreg=100., sceneL2=1. / 64.):
-        # All the metadata.
         self.glob = imgglob
         self.outdir = os.path.abspath(outdir)
         self.sky = sky
@@ -182,9 +72,6 @@ class Scene(object):
                 "There are no files matching '{0}'".format(imgglob)
 
         # Set the scene size.
-        image = self.first_image
-        assert size <= min(image.shape), \
-                "The scene size must be <= to the data size."
         self.size = size
 
         # L2 norm weights.
@@ -207,64 +94,88 @@ class Scene(object):
         else:
             self.kernel = kernel
 
-        # Initialize the scene as a centered Gaussian.
-        s = self.size + 2 * psf_hw
-        x = np.linspace(-0.5 * s, 0.5 * s, s) ** 2
-        r = np.sqrt(x[:, None] + x[None, :])
-        self.scene = np.exp(-0.5 * r) / np.sqrt(2 * np.pi)
-
     def setup(self):
-        # HACK
-        self.size += 2 * self.psf_hw
+        """
+        Do the initial setup for a Thresher run. This is not needed for a
+        TLI run (hence why it is not in `__init__`). It first calculates the
+        initial guess for the scene (using TLI) and then figures out the
+        index gymnastics needed for unravelling the scene and PSF.
 
+        """
         # Run lucky imaging. MAGIC: co-add the top 1 percent.
-        images, ranks, scene = self.run_lucky(top_percent=1)
+        images, ranks, self.coords, scene = self.run_tli(self.image_list,
+                size=self.size + 2 * self.psf_hw, top_percent=1)
+        self.image_list = images
+        scene = scene[1]
         self.scene = scene - np.median(scene)
 
-        # HACK part 2.
-        self.size -= 2 * self.psf_hw
-
         # Calculate the mask that we will use to unravel the scene.
-        self.scene_mask = unravel_scene(len(self.scene), self.psf_hw)
+        self.scene_mask = utils.unravel_scene(len(self.scene), self.psf_hw)
 
         # And the PSF.
         self.psf_rows, self.psf_cols = \
-                unravel_psf(len(self.scene), self.psf_hw)
+                utils.unravel_psf(len(self.scene), self.psf_hw)
 
-    def run_lucky(self, do_coadd=True, top=None, top_percent=None):
+    def run_tli(self, image_list, size=None, top=None, top_percent=None):
         """
         Run traditional lucky imaging on a stream of data.
 
+        ## Arguments
+
+        * `image_list` (list): The list of filenames for the images which
+          will be ranked and combined using TLI.
+
         ## Keyword Arguments
 
-        * `do_coadd` (bool): Return the coadded image?
-        * `top` (int): How many images should be coadded.
+        * `size` (int): The size of the scene to be determined.
+        * `top` (int): How many images should be coadded?
+        * `top_percent` (float): An alternative notation for `top` instead
+          specified by a percentage.
+
+        ## Returns
+
+        * `fns` (list): The filenames ordered from best to worst as ranked
+          by TLI.
+        * `ranks` (list): The value of the ranking scalar corresponding to
+          the images listed in `fns`.
+        * `centers` (list): The coordinates of the centers of each image as
+          determined by centroiding.
+        * `coadd` (numpy.ndarray): The resulting co-added image.
 
         """
-        Ndata = len([f for f in self.image_list])
+        Ndata = len(image_list)
 
-        data = np.empty((Ndata, self.size, self.size))
+        # These will be instantiated the first time through the loop.
+        stack = None
+        scene = None
 
-        self.coords = {}
-        results = {}
-        for n, fn in enumerate(self.image_list):
-            image = load_image(fn)
-            coords, result = centroid_image(image, self.scene, self.size)
-            self.coords[fn] = coords
+        # Calculate the centers and ranks of the images.
+        centers = {}
+        ranks = {}
+        for n, fn in enumerate(image_list):
+            img = utils.load_image(fn)
+            if size is None:
+                size = np.max(img.shape)
+            if stack is None:
+                # Allocate a stack for the centroided images.
+                stack = np.empty((Ndata, size, size))
+            if scene is None:
+                x = np.linspace(-0.5 * size, 0.5 * size, size) ** 2
+                r = np.sqrt(x[:, None] + x[None, :])
+                scene = 0.5 * np.exp(-0.5 * r) / np.pi
 
-            data[n] = result
-
-            results[fn] = (n, float(result[self.size / 2, self.size / 2]))
+            center, result, mask = utils.centroid_image(img, size, scene=scene)
+            centers[fn] = center
+            stack[n] = result
+            ranks[fn] = (n, float(result[size / 2, size / 2]))
 
         # Sort by brightest centroided pixel.
-        ranked = sorted(results, reverse=True, key=lambda k: results[k][-1])
-        fns, ranks = [], []
-        for k in ranked:
+        ranked = sorted(ranks, reverse=True, key=lambda k: ranks[k][1])
+        fns, values = [], []
+        for i in range(len(ranked)):
+            k = ranked[i]
             fns.append(k)
-            ranks.append(results[k][-1])
-
-        if not do_coadd:
-            return fns, ranks
+            ranked.append(ranks[k][-1])
 
         # Do the co-add.
         if top is None and top_percent is None:
@@ -272,88 +183,181 @@ class Scene(object):
         elif top_percent is not None:
             top = max(1, int(top_percent * 0.01 * len(ranked)))
 
-        final = np.zeros((self.size, self.size))
-        for i, k in enumerate(fns[:top]):
-            final += data[results[k][0]] / float(top)
+        top = np.atleast_1d(top)
+        final = np.zeros((len(top) + 1, size, size))
+        for j, t in enumerate(np.atleast_1d(top)):
+            for i, k in enumerate(fns[:t]):
+                final[j] += stack[ranks[k][0]] / float(t)
+        for i, k in enumerate(fns):
+            final[-1] += stack[ranks[k][0]] / float(t)
 
-        return fns, ranks, final
+        return fns, ranks, centers, final
 
-    @property
-    def first_image(self):
-        """Get the data for the first image"""
-        return load_image(self.image_list[0])
-
-    def run_inference(self, basepath=None, npasses=5, current_pass=0,
-            current_img=None, do_centroiding=True, subtract_median=False,
-            use_nn=True):
+    def do_update(self, fn, alpha, maskfn=None, maskhdu=0, median=True,
+            nn=False):
         """
-        Run the full inference on the dataset.
+        Do a single stochastic gradient update using the image in a
+        given file and learning rate.
+
+        ## Arguments
+
+        * `fn` (str): The filename of the image to be used.
+        * `alpha` (float): The learning rate.
 
         ## Keyword Arguments
 
-        * `npasses` (int): The number of passes to run.
-        * `current_pass` (int): The pass number to start at. This is used
-          for restarting.
-        * `current_img` (int): The image number to start at on the first
-          pass through the data. This is used for restarting.
+        * `maskfn` (str): The path to the mask file. By default, we assume
+          that there are no masked pixels.
+        * `maskhdu` (int): The HDU number for the mask. If `maskfn` is not
+          provided and `maskhdu` is not 0, the mask is expected in a non-zero
+          HDU of `fn`.
+        * `median` (bool): Subtract the median of the scene?
+        * `nn` (bool): Project onto the non-negative plane?
+
+        ## Returns
+
+        * `data` (numpy.ndarray): The centered and cropped data image used
+          for this update.
 
         """
-        if basepath is not None:
-            self.basepath = basepath
+        image = utils.load_image(fn)
 
-        if current_img is None:
-            current_img = self.img_number
+        # Load the mask if it's provided.
+        if maskfn is not None or maskhdu > 0:
+            if maskfn is None:
+                maskfn = fn
+            mask = utils.load_image(maskfn, hdu=maskhdu, dtype=bool)
+        else:
+            mask = np.ones_like(image)
 
+        # Center the data.
+        coords, data, m = utils.centroid_image(image, self.size,
+                scene=self.scene, coords=self.coords.get(fn, None))
+
+        # Center the mask.
+        c0, mask, m = utils.centroid_image(mask, self.size, coords=coords)
+
+        # Combine the data mask with the offset mask.
+        mask *= mask
+        mask *= ~np.isnan(data)
+        mask = np.array(mask, dtype=bool)
+
+        # Piston the data for numerical stability.
+        data += self.sky - np.min(data)
+
+        # Do the inference.
+        self.old_scene = np.array(self.scene)
+        self.psf, self.dlds = _worker(self, data)
+        self.scene[mask] += alpha * self.dlds[mask]
+
+        # WTF?!?
+        gc.collect()
+
+        # Apply some serious HACKS!
+        if median:
+            self.scene -= np.median(self.scene)
+        if nn:
+            self.scene[self.scene < 0] = 0.0
+
+        return data
+
+    def run_inference(self, npasses=5, median=False, nn=True, top=None,
+            thin=10):
+        """
+        Thresh the data.
+
+        ## Keyword Arguments
+
+        * `npasses` (int): The number of times to run through the data.
+        * `median` (bool): Subtract the median of the scene at each update.
+        * `nn` (bool): Constrain the inferred scene to be non-negative.
+        * `top` (int): Only consider the top few images.
+        * `thin` (int): Only save the state every few images.
+
+        """
         N = len([i for i in self.image_list])
 
-        for self.pass_number in xrange(current_pass, npasses):
-            for self.img_number, self.fn in enumerate(self.image_list):
-                if self.img_number >= current_img:
-                    image = load_image(self.fn)
-                    coords, data = \
-                            centroid_image(image, self.scene, self.size,
-                                    coords=self.coords[self.fn])
+        iml = self.image_list
+        if top is not None:
+            iml = iml[:int(top)]
+        for pass_number in xrange(npasses):
+            if pass_number > 0:
+                np.random.shuffle(iml)
+            for img_number, fn in enumerate(iml):
+                # If it's the first pass, `alpha` should decay and we
+                # should use _non-negative_ optimization.
+                if self.pass_number == 0:
+                    alpha = min(2. / (1 + img_number), 0.25)
+                    use_nn = nn
+                else:
+                    alpha = 2. / N  # MAGIC: 2.
+                    use_nn = False
 
-                    data += self.sky - np.min(data)
+                data = self.do_update(fn, alpha, median=median, nn=use_nn)
 
-                    # If it's the first pass, `alpha` should decay and we
-                    # should use _non-negative_ optimization.
-                    if self.pass_number == 0:
-                        alpha = min(2. / (1 + self.img_number), 0.25)
-                        nn = use_nn  # True
-                    else:
-                        alpha = 2. / N  # MAGIC: 2.
-                        nn = False
+                # Save the current state of the scene.
+                if img_number % thin == 0:
+                    self.save(fn, pass_number, img_number, data)
 
-                    # Do the inference.
-                    self.old_scene = np.array(self.scene)
-                    self.psf, self.this_scene = _worker(self, data)
-                    self.scene = (1 - alpha) * self.scene \
-                                            + alpha * self.this_scene
-                    if nn:
-                        self.scene[self.scene < 0] = 0.0
-
-                    # WTF?!?
-                    gc.collect()
-
-                    # Subtract the median.
-                    if subtract_median:
-                        self.scene -= np.median(self.scene)
-
-                    # Save the output.
-                    self._save_state(data)
-
-            # After one full pass through the data, make sure that the index
-            # of the zeroth image is reset. We only want to start from this
-            # image on the first pass through the data when we're restarting.
-            current_img = 0
-
-    @dfm_time
-    def _infer_psf(self, data, useL2=False):
+    def get_psf_matrix(self, L2=True):
         """
-        Take data and a current belief about the scene; infer the psf for
-        this image given the scene.  This code infers a sky level
-        simultaneously.  That might seem like a detail, but it matters.
+        Get the unraveled matrix for the current PSF.
+
+        ## Keyword Arguments
+
+        * `L2` (bool): Should the rows for the L2 norm be included?
+
+        ## Returns
+
+        * `psf_matrix` (scipy.sparse.csr_matrix): The sparse, unraveled PSF
+          matrix.
+
+        """
+        S = len(self.scene)
+        P = self.psf_hw
+
+        D = S - 2 * P
+        data_size = D ** 2
+        scene_size = S ** 2
+        psf_size = (2 * P + 1) ** 2
+
+        # NOTE: the PSF is reversed here.
+        vals = np.zeros((data_size, psf_size)) \
+                + self.psf.flatten()[None, ::-1]
+        vals = vals.flatten()
+
+        rows, cols = self.psf_rows, self.psf_cols
+        shape = [data_size, scene_size]
+
+        # Append the identity for the L2 norm.
+        if L2:
+            vals = np.append(vals, self.sceneL2 + np.zeros(self.scene.size))
+            rows = np.append(rows, np.arange(data_size,
+                data_size + scene_size))
+            cols = np.append(cols, np.arange(scene_size))
+
+            shape[0] += scene_size
+
+        psf_matrix = csr_matrix((vals, (rows, cols)), shape=shape)
+
+        return psf_matrix
+
+    @utils.timer
+    def infer_psf(self, data):
+        """
+        Take data and a current belief about the scene; infer the PSF for
+        this image given the scene. This code infers a sky level
+        simultaneously. That might seem like a detail, but it matters. This
+        method uses the sparse non-negative least-squares algorithm from
+        scipy.
+
+        ## Arguments
+
+        * `data` (numpy.ndarray): The image data.
+
+        ## Returns
+
+        * `psf` (numpy.ndarray): The inferred 2D PSF image.
 
         """
         # Sort out the dimensions.
@@ -390,46 +394,74 @@ class Scene(object):
         # defined.
         return new_psf[:-1][::-1].reshape((P, P))
 
-    @dfm_time
-    def _infer_scene(self, data):
+    @utils.timer
+    def infer_scene(self, data):
         """
         Take data and a current belief about the PSF; infer the scene for
         this image given the PSF.
 
+        ## Arguments
+
+        * `data` (numpy.ndarray): The data.
+
+        ## Returns
+
+        * `new_scene` (numpy.ndarray): The scene implied by this particular
+          data alone.
+
+        ## Note
+
+        This method has been deprecated by `get_dlds` and the proper
+        stochastic gradient update. I'm keeping this here for now just in
+        case.
+
         """
-        # NOTE: the PSF is reversed here.
-        vals = np.zeros((data.size, self.psf.size)) \
-                + self.psf.flatten()[None, ::-1]
-        vals = vals.flatten()
-
-        # Append the identity for the L2 norm.
-        vals = np.append(vals, self.sceneL2 + np.zeros(self.scene.size))
-
-        psf_matrix = csr_matrix((vals, (self.psf_rows, self.psf_cols)),
-                shape=(data.size + self.scene.size, self.scene.size))
-
         # Infer scene and return
         data_vector = np.append(data.flatten(), np.zeros(self.scene.size))
-        results = lsqr(psf_matrix, data_vector)
+        results = lsqr(self.get_psf_matrix(L2=True), data_vector)
 
         new_scene = results[0].reshape(self.scene.shape)
 
         return new_scene
 
-    def _save_state(self, data):
-        _id = "{0:d}-{1:08}".format(self.pass_number, self.img_number)
+    @utils.timer
+    def get_dlds(self, data):
+        """
+        Take data and a current belief about the PSF; compute the gradient of
+        log-likelihood with respect to the scene.
+
+        ## Arguments
+
+        * `data` (numpy.ndarray): The data.
+
+        ## Returns
+
+        * `dlds` (numpy.ndarray): The gradient of the likelihood function
+          with respect to the scene parameters.
+
+        """
+        psf_matrix = self.get_psf_matrix(L2=False)
+
+        dlds = psf_matrix.transpose().dot(data.flatten() -
+                psf_matrix.dot(self.scene.flatten()))
+        dlds = dlds.reshape(self.scene.shape)
+
+        return dlds
+
+    def save(self, fn, pass_number, img_number, data):
+        _id = "{0:d}-{1:08}".format(pass_number, img_number)
         outfn = os.path.join(self.outdir, _id + ".fits")
 
         hdus = [pyfits.PrimaryHDU(data),
-                pyfits.ImageHDU(self.this_scene),
+                pyfits.ImageHDU(self.dlds),
                 pyfits.ImageHDU(self.scene),
                 pyfits.ImageHDU(self.psf),
                 pyfits.ImageHDU(self.kernel)]
 
-        hdus[0].header.update("datafn", self.fn)
+        hdus[0].header.update("datafn", fn)
         hdus[0].header.update("size", self.size)
-        hdus[0].header.update("pass", self.pass_number)
-        hdus[0].header.update("image", self.img_number)
+        hdus[0].header.update("pass", pass_number)
+        hdus[0].header.update("image", img_number)
         hdus[0].header.update("sky", self.inferred_sky)
         hdus[1].header.update("status", "old")
         hdus[2].header.update("status", "new")

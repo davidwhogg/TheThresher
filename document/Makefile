@@ -1,6 +1,28 @@
-all: thresher.pdf nonnegative.pdf
+# Enter the name(s) of the .tex file(s) that you want to compile.
+TEX_FILES = thresher nonnegative
+
+# You shouldn't need to edit below here.
+LATEX     = pdflatex
+RM        = rm -rf
+
+TMP_SUFFS = pdf aux bbl blg log dvi ps eps out
+SUFF      = pdf
+
+DOCS = $(foreach d, ${TEX_FILES}, ${d}.${SUFF})
+CHECK_RERUN = grep Rerun $*.log
+
+default: ${DOCS}
 
 %.pdf: %.tex
-	pdflatex $<
-	bash -c " ( grep Rerun $*.log && pdflatex $< ) || echo noRerun "
-	bash -c " ( grep Rerun $*.log && pdflatex $< ) || echo noRerun "
+	${LATEX} $<
+	( ${CHECK_RERUN} && ${LATEX} $< ) || echo "Done."
+	( ${CHECK_RERUN} && ${LATEX} $< ) || echo "Done."
+
+clean:
+	${RM} $(foreach d, ${TEX_FILES}, $(foreach suff, ${TMP_SUFFS}, ${d}.${suff}))
+
+figures: ../thresher/figures.py
+	python ../thresher/figures.py
+
+clean_figs:
+	${RM} index_gymnastics.pdf

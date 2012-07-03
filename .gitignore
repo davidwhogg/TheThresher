@@ -15,3 +15,6 @@ nonnegative.pdf
 build
 docs
 out
+results
+*.pdf
+*.out

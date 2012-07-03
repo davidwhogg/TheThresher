@@ -1,94 +1,168 @@
-% This file is part of The Thresher.
-
-% to-do
-% -----
-% - Adam Bolton commented on my blog about http://arxiv.org/abs/0911.2689 and http://arxiv.org/abs/1111.6525 
-% - write first draft
-% - make and insert figures
-% - send to Lauer, Marshall, Kendrew, Brandner, Crotts for comments
-% - will require a full notation audit!
-
 \documentclass[12pt,preprint]{aastex}
 
-\newcounter{address}
-\setcounter{address}{0}
-\newcommand{\foreign}[1]{\textit{#1}}
-\newcommand{\etal}{\foreign{et~al.}}
-\newcommand{\project}[1]{\textsl{#1}}
+% has to be before amssymb it seems
+\usepackage{color,hyperref}
+\definecolor{linkcolor}{rgb}{0,0,0.5}
+\hypersetup{colorlinks=true,linkcolor=linkcolor,citecolor=linkcolor,
+            filecolor=linkcolor,urlcolor=linkcolor}
+
+\usepackage{url}
+\usepackage{algorithmic,algorithm}
+\usepackage{amssymb,amsmath}
+\usepackage{graphicx}
+
+\newcommand{\arxiv}[1]{\href{http://arxiv.org/abs/#1}{arXiv:#1}}
+
+\newcommand{\project}[1]{{\sffamily #1}}
 \newcommand{\TheThresher}{\project{The~Thresher}}
 \newcommand{\LCOGT}{\project{LCOGT}}
+\newcommand{\Python}{\project{Python}}
+\newcommand{\numpy}{\project{numpy}}
+\newcommand{\github}{\project{GitHub}}
+\newcommand{\pip}{\project{pip}}
+\newcommand{\paper}{\emph{Article}}
+\newcommand{\license}{GNU General Public License v2}
+
 \newcommand{\documentname}{\textsl{Article}}
 
+\newcommand{\foreign}[1]{\emph{#1}}
+\newcommand{\etal}{\foreign{et\,al.}}
+\newcommand{\etc}{\foreign{etc.}}
+
+\newcommand{\Fig}[1]{Figure~\ref{fig:#1}}
+\newcommand{\fig}[1]{\Fig{#1}}
+\newcommand{\figlabel}[1]{\label{fig:#1}}
+\newcommand{\Tab}[1]{Table~\ref{tab:#1}}
+\newcommand{\tab}[1]{\Tab{#1}}
+\newcommand{\tablabel}[1]{\label{tab:#1}}
+\newcommand{\Eq}[1]{Equation~(\ref{eq:#1})}
+\newcommand{\eq}[1]{\Eq{#1}}
+\newcommand{\eqlabel}[1]{\label{eq:#1}}
+\newcommand{\Sect}[1]{Section~\ref{sect:#1}}
+\newcommand{\sect}[1]{\Sect{#1}}
+\newcommand{\App}[1]{Appendix~\ref{sect:#1}}
+\newcommand{\app}[1]{\App{#1}}
+\newcommand{\sectlabel}[1]{\label{sect:#1}}
+\newcommand{\Algo}[1]{Algorithm~\ref{algo:#1}}
+\newcommand{\algo}[1]{\Algo{#1}}
+\newcommand{\algolabel}[1]{\label{algo:#1}}
+
+% math symbols
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\like}{\mathscr{L}}
+\newcommand{\bvec}[1]{\boldsymbol{#1}}
 \newcommand{\given}{\,|\,}
 \newcommand{\transpose}[1]{{#1}^{\mathsf{T}}}
-\newcommand{\data}{D}
-\newcommand{\scene}{S}
-\newcommand{\psf}{\psi}
-\newcommand{\dpsf}{\tilde{\psi}}
+\newcommand{\unit}[1]{\,\mathrm{#1}}
+\DeclareMathOperator*{\argmax}{arg\,max}
 
-\title{DRAFT: \TheThresher: \\
-  Lucky imaging without the terrible, \emph{terrible} waste \\
-  \textit{or} \\
-  Don't throw away data!}
-\author{
-  Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP}},
-  David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA},\ref{email}},
-  Federica Bianco\altaffilmark{\ref{CCPP},\ref{LCOGT}}
+% Parameters
+\newcommand{\data}{\ensuremath{D}}
+\newcommand{\scene}{\ensuremath{\Sigma}}
+\newcommand{\kernel}{\ensuremath{K}}
+\newcommand{\psf}{\ensuremath{\psi}}
+\newcommand{\dpsf}{\ensuremath{\tilde{\psi}}}
+\newcommand{\dvec}{\ensuremath{d}}
+\newcommand{\evec}{\ensuremath{e}}
+\newcommand{\svec}{\ensuremath{s}}
+\newcommand{\smat}{\ensuremath{S}}
+\newcommand{\pvec}{\ensuremath{p}}
+\newcommand{\pmat}{\ensuremath{P}}
+
+\newcommand{\dfmplot}[1]{%
+\begin{center}%
+    \includegraphics[width=\textwidth]{#1}%
+\end{center}%
+}
+\newcommand{\threshplot}[1]{%
+\begin{center}%
+\includegraphics[width=0.8\textwidth,trim=21cm 11cm 4cm 11.8cm,clip=true]{#1}%
+\end{center}%
 }
 
+\begin{document}
+
+\title{\TheThresher: We don't throw away data}
+
+\author{%
+    Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP},\ref{email}} \&
+    David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA}}
+}
+
+\newcounter{address}
 \setcounter{address}{1}
 \altaffiltext{\theaddress}{\stepcounter{address}\label{CCPP} Center
   for Cosmology and Particle Physics, Department of Physics, New York
   University, 4 Washington Place, New York, NY 10003}
+\altaffiltext{\theaddress}{\stepcounter{address}\label{email} To whom
+  correspondence should be addressed: \texttt{danfm@nyu.edu}}
 \altaffiltext{\theaddress}{\stepcounter{address}\label{MPIA}
   Max-Planck-Institut f\"ur Astronomie, K\"onigstuhl 17, D-69117
   Heidelberg, Germany}
-\altaffiltext{\theaddress}{\stepcounter{address}\label{email} To whom
-  correspondence should be addressed: \texttt{david.hogg@nyu.edu}}
-\altaffiltext{\theaddress}{\stepcounter{address}\label{LCOGT}
-  \LCOGT, UCSB, or whatever}
 
 \begin{abstract}
-We present a new method---and a new data-processing pipeline---for
-working with Lucky Imaging data, in which high-resolution images are
-obtained by combining very large numbers of short exposures taken
-under a variable point-spread function.  The method is based on
-previous work on multi-frame deconvolution; it is valuable because it
-does \emph{not} involve discarding any data whatsoever.  The method
-works by extracting information about the high-resolution scene from
-every image, no matter what that image's PSF.  We demonstrate the
-method on data taken with the \LCOGT\ lucky imaging system.
+    We present a image analysis pipeline for online multi-frame blind
+    deconvolution---an alternative to traditional lucky imaging
+    techniques---that makes use of all available data to obtain the best
+    estimate of the astronomical scene within the current computational
+    limits. We demonstrate the effectiveness of this technique on data
+    from the \LCOGT\ lucky imaging dataset.
+    Source code available at \url{http://danfm.ca/thresher}
+    under the \license.
 \end{abstract}
 
-\begin{document}
+\keywords{%
+    methods: data analysis ---
+    methods: numerical ---
+    methods: statistical
+}
 
-\textbf{[This document is a very early draft dated 2012-05-25.  Please do not cite it without the permission of the authors.]}
+\clearpage
 
 \section{Introduction}
 
 High-resolution imaging has seen great success in the last decades,
 with the \project{Hubble Space Telescope}, natural and artificial
-guide-star adaptive optics, and lucky imaging.  Lucky imaging is
-possible with very inexpensive equipment, but as a technique it is not
-inexpensive because it involves so much waste.
+guide-star adaptive optics, and various post-processing techniques.
+With ground-based telescopes, very sophisticated hardware and/or
+software is required if one hopes to obtain high angular resolution.
+This is because atmospheric turbulence causes high frequency variations
+in the point spread function (PSF) that quickly degrade the angular
+resolution of the optics. The PSF of a standard long exposure suitable
+for astronomy will be smooth and much wider than the ideal diffraction
+limit. This is because it is produced by the time average over
+atmospheric variations. The standard post-processing techniques for
+dealing with this involve obtaining a large number of extremely short
+exposures---on the timescale of the atmospheric variations. These
+short exposures have low signal-to-noise and tend to have very
+complicated PSFs but they provide strong constraints on the
+diffraction limited scene when many images are used together.
 
-The idea behind traditional lucky imaging is that typical, smooth
-atmospheric seeing is a time average of a rapidly varying, multi-modal
-point-spread function.  If you take images rapidly with a very fast
-camera, occasionally the atmosphere will---just through
-chance---produce a nearly diffraction-limited image.  That is,
-occasionally the wavefront distortions from the atmosphere will come
-close to canceling (or really cancelling the imperfections in your
-real telescope).  In a lucky imaging run, you take an enormous number
+The idea of exploiting the high resolution information in short
+exposures was first suggested by \citet{labeyrie} and there has
+been a rich literature on this topic since then. In particular,
+a very popular technique called \emph{traditional lucky imaging}
+\citep[TLI;][]{law} is based on Fried's derivation of the probability
+of obtaining a
+frame with unusually ``lucky'' seeing when many images are taken
+quickly. That is, occasionally---just by chance---the wavefront
+distortions from the atmosphere will come close to canceling (or
+really canceling the imperfections in your real telescope).
+Lucky imaging is very popular because it is simple to understand and
+implement and it can be used with very inexpensive equipment, but as a
+technique it is not inexpensive because it results in a substantial
+amount of wasted data.
+
+In a typical TLI imaging run, you take an enormous number
 of short frames and \emph{throw almost all of them away}.  The
 resulting average, stack, or co-add of the best images can have very
-high angular resolution.  It can't have very high signal-to-noise,
-simply because so little data in the end get used (typically much less
-than one percent), but it can be very good for making measurements
-that require high spatial resolution.
+high angular resolution.  It doesn't, of course, have very high
+signal-to-noise, simply because so little data in the end get used
+(typically about one percent), but it can be very good for making
+measurements that require high spatial resolution.
 
 Lucky imaging is straightforward---and very simple to implement---but
-it violates one very important principle of empirical science: There
+it violates one very important principle of empirical science: there
 is no way that \emph{throwing away} non-corrupted data can give you
 \emph{more information}.  It might be that doing something heuristic
 with bad data will make your results worse, but if you are doing
@@ -104,20 +178,21 @@ justifiable when the point-spread function is varying rapidly.  Lucky
 imaging is also very sensible operationally: It provides results
 rapidly (even on-the-fly during the observing run), and permits
 analysis of enormous data sets without enormous computation (for
-example, it can be implemented in map-reduce).  What we are about to
-propose will not be as fast or as computationally efficient.  It will,
-however, be justifiable within probabilistic data analysis and will
+example, it can be implemented in map-reduce). The method that we
+propose here is not as fast or as computationally efficient.  It is,
+however, justifiable within probabilistic data analysis and will
 make use of every datum.
 
-...What is speckle imaging and it's poor cousin shift-and-add?..
+\TheThresher\ is an alternative to TLI and other post-processing
+techniques that is a special case of a broad class of algorithms
+called \emph{blind deconvolution} \citep{ayers}. In particular, it
+is an extension of the multi-frame online blind deconvolution (MOBD)
+from \citet{hirsch}. In this \documentname, we describe the theory
+behind and implementation of the robust blind deconvolution engine
+behind \TheThresher. We also demonstrate the significant improvements
+made possible by this technique using data from \LCOGT.
 
-...Do a demo of traditional lucky imaging (TLI) where we move the
-threshold and see the results change...
-
-...How are these ideas related to deconvolution \citep{hirsch} and why
-do we want band-limited deconvolution \citep{magain}?..
-
-\section{Imaging generalities}
+\section{Imaging} \sectlabel{imaging}
 
 From our perspective, an image read out by a real camera (with, say,
 square pixels in a focal-plane array) is a noisy sampling of the
@@ -126,73 +201,78 @@ Importantly, if you want to think of the image as a pure
 \emph{sampling} of a convolved intensity field---and trust us, you
 do---then the point-spread function that convolves the intensity field
 should be not the pure atmospheric PSF, nor even the
-instrument-convolved atmospheric PSF.  It should be the
-\emph{pixel-convoved} PSF \emph{at the focal plane}.  From here on,
+instrument-convolved atmospheric PSF\@.  It should be the
+\emph{pixel-convolved} PSF \emph{at the focal plane}.  From here on,
 whenever we mention or use the PSF, we mean \emph{always} the
 pixel-convolved PSF at the focal plane.  This choice may seem strange,
 but when this pixel-convolved PSF is used, the pixel values are
 delta-function samples of the convolved intensity field, reducing
 enormously synthetic-image computation.  Furthermore, if the
 non-pixel-convolved PSF is smooth and well-sampled, the
-pixel-conovolved PSF is \emph{also} smooth, so there are no significant
+pixel-convolved PSF is \emph{also} smooth, so there are no significant
 numerical losses or approximations incurred by making this choice.
 
-It pains us to point out that the PSF, as it is usually conceived, is
-actually \emph{correlated} not \emph{convolved} with the true scene.
-That is a choice about what the PSF is.  In what follows we will use
-the word ``convolve'' in conformity with usual practice in astronomy,
-but the way we show the PSFs in the figures, it is probably
-``correlate'' that we are really doing.
+% % Maybe I don't get it but this seems not totally needed...
+% It pains us to point out that the PSF, as it is usually conceived, is
+% actually \emph{correlated} not \emph{convolved} with the true scene.
+% That is a choice about what the PSF is.  In what follows we will use
+% the word ``convolve'' in conformity with usual practice in astronomy,
+% but the way we show the PSFs in the figures, it is probably
+% ``correlate'' that we are really doing.
 
 To make our ideas about imaging concrete, we can represent the model
 that will be used throughout this paper for imaging data as a
 convolution
-\begin{eqnarray}\displaystyle
-\data_n &=& \psf_n \ast \scene + E_n
-\quad ,
-\end{eqnarray}
+\begin{equation}\eqlabel{convimg}
+    \data_n = \psf_n \ast \scene + E_n \quad,
+\end{equation}
 where $\data_n$ is the data image---one of $N$ noisy $M$-pixel
 images---with index $1<n<N$, $\psf_n$ is the pixel-convolved PSF
 appropriate for image $n$, $\ast$ represents the convolution
 operation, $\scene$ is the ``true'' intensity field (``scene'') above
 the atmosphere, and $E_n$ is the noise contribution to image $n$.
-Convolution is a linear operation, so, following \citet{hirsch}, we
-can write the model in two equivalent ways:
+Since convolution is a linear operation, it can be written in matrix
+form. This is especially easy to visualize in this context where all of
+the convolutions are discrete. Casting \eq{convimg}---our
+\emph{generative model} for an astronomical image---as a linear system
+has significant computational benefits and there are many techniques
+available for solving such an system. Furthermore, following
+\citet{hirsch}, we can write the model in two equivalent ways:
 \begin{eqnarray}\displaystyle
-d_n &=& P_n \cdot s + e_n
+\dvec_n &=& \pmat_n \cdot \svec + \evec_n \eqlabel{linimg1}
 \\
-d_n &=& S \cdot p_n + e_n
+\dvec_n &=& \smat \cdot \pvec_n + \evec_n \eqlabel{linimg2}
 \quad ,
 \end{eqnarray}
-where now $d_n$ is the original data image $\data_n$ reformatted as a
-one-dimensional length-$M$ column vector, $P_n$ is a $W\times M$
-sparse matrix that contains $K$ independent values representing the
-point-spread function for image $n$ on a frighteningly reformatted
-pixel grid, $s$ is a length-$W$ column vector representing the true
-scene, $e_n$ is a length-$M$ column vector of noise constributions to
-image $n$, $\scene$ is a $K\times M$ sparse matrix that contains $W$
-independent values representing the true scene also frighteningly
-reformatted, and $p_n$ is a length-$K$ column vector representing the
-PSF.  The idea is that if the image data are unwrapped into a
+where now $\dvec_n$ is the original data image $\data_n$ reformatted as a
+one-dimensional length-$M$ column vector, $\pmat_n$ is a $W\times M$
+sparse matrix that contains $K$ independent values given by the entries
+in $\psf_n$, $s$ is a length-$W$ column vector representing the true
+scene, $\evec_n$ is a length-$M$ column vector of noise contributions to
+image $n$, $\smat$ is a $K\times M$ dense matrix that contains $W$
+independent values representing the scene, and $\pvec_n$ is a length-$K$
+column vector representing the PSF\@. In \eq{linimg1} and \eq{linimg2},
+the transformations
+$\psf_n \to \pmat_n$ and $\scene \to \smat$ are illustrated in \fig{index}.
+The idea is that if the image data are unwrapped into a
 one-dimensional vector, the linear convolution operation can always be
 represented as a matrix operation acting on another vector, and there
 is a choice of whether to see the PSF as the matrix and the scene as
-the vector, or vice versa.  Not obvious?  Think about it!
+the vector, or vice versa.
 
-...insert here a figure demonstrating the model for one of the \LCOGT\ images...
+\begin{figure}[!htbp]
+    \dfmplot{index_gymnastics.pdf}
+    \caption{Demonstration of the index gymnastics needed to convert between
+        images and the matrix representation of convolution.\figlabel{index}}
+\end{figure}
 
 In real astronomical applications, neither the PSF nor the true scene
-is known \foreign{a priori}.  If our interest is the true scene---and
-it usually is---then astronomy is a special case of what's known in
-the computer science literature as \emph{blind deconvolution}.  We
+is known \foreign{a priori}. If our interest is the true scene---and
+it usually is---then this is a special case of what's known in
+the computer science literature as \emph{blind deconvolution}. We
 want to explain the data as being produced by something fundamental of
 interest convolved with instrumental resolution that is not known in
-advance and also of no particular interest in itself.  Astronomers are
-loath to use the word ``deconvolution'' but any time we make a catalog
-of precise stellar positions and fluxes from noisy, low-resolution
-data, we are performing some kind of deconvolution: We have
-information about the positions of stars that is much more precise
-than the the angular precision of any instrument-realized PSF.
+advance and also of no particular interest in itself.
 
 One small but perhaps not insignificant issue with the model expressed
 here is that it posits the existence of a ``true scene''.  For
@@ -202,97 +282,276 @@ instrument for making finite-resolution predictions.  It is not going
 to be an accurate representation of the scene we would see with an
 implausible infinitely large telescope!  It is a representation of the
 intensity field that is only to be used within the context of
-covolution with a finite PSF.  Similar issues arise in radio astronomy
+convolution with a finite PSF\@.  Similar issues arise in radio astronomy
 when interferometric data are ``cleaned''.
 
 Now, with an error model---a probabilistic description of how the
-$E_n$ image (or equivalently, $e_n$ vector) is generated---we can
+$E_n$ image (or equivalently, $\evec_n$ vector) is generated---we can
 write down a likelihood function or a probability for the data $\data_n$
-(or equivalently $d_n$) given the model parameters $p_n$ and $s$.  For
-example, if the $M$ per-pixel noise contributions are (independently)
-drawn from Gaussians with zero means then this likelihood has the
-incredibly simple form
-\begin{eqnarray}\displaystyle
-\ln p(\data_n\given p_n, s) &=& Q - \frac{1}{2}\,\chi^2_n
-\\
-\chi^2_n &\equiv& \transpose{[d_n - P_n \cdot s]} \cdot C^{-1} \cdot [d_n - P_n \cdot s]
-\quad ,
-\end{eqnarray}
-where $Q$ is some constant, we have used the column-vectoriness of
-$d_n$, sparse matrix $P_n$ is trivially constructable from $p_n$, and
-$C^{-1}$ is a diagonal $M\times M$ matrix with per-pixel inverse
-variances on the diagonal and zeros everywhere else; this gives
-$\chi^2_n$ the standard ``chi-squared'' meaning.  (The data pixels can
-be made non-independent by adding off-diagonal terms to $C^{-1}$.)
+(or equivalently $\dvec_n$) given the model parameters $\pvec_n$ and
+$\svec$.  For example, if the $M$ per-pixel noise contributions are
+(independently) drawn from Gaussians with zero means then this likelihood
+has the incredibly simple form
+\begin{equation}\eqlabel{lnlike}
+\ln p(\data_n \given \psf_n, \scene) = Q - \frac{1}{2}\,\chi^2_n
+\end{equation}
+where $Q$ is a normalization constant and
+\begin{equation}\eqlabel{chi2}
+    \chi^2_n \equiv \transpose{[d_n - P_n \cdot s]} \cdot C^{-1}
+    \cdot [d_n - P_n \cdot s] \quad.
+\end{equation}
+In \eq{chi2}, $C^{-1}$ is the diagonal $M \times M$
+matrix with the per-pixel inverse variance on the diagonal. If the
+noise was not independent between pixels, there would be off-diagonal
+terms in $C^{-1}$.
 
-With some priors, we can even in principle write down a posterior
-probability distribution function over true scenes $s$ and PSFs $p_n$
-given the data (the set of all $N$ images $\data_n$ or vectors $d_n$).
-This posterior PDF can even be \emph{marginalized} over all possible
-PSFs to leave us with a marginalized posterior PDF for just the true
-scene $s$.  That would be just about the best we could possibly do in
-this problem, for very general reasons.
-
+In principle, it is even possible to write down a prior over possible
+scenes and PSFs. Combining these priors with \eq{lnlike} yields the
+posterior probability distribution function (PDF) given the full dataset.
+Then, it is theoretically possible to marginalize this posterior PDF
+over all possible PSFs and recover the distribution over possible
+scenes $\scene$. That would be just about the best we could possibly do
+in this problem, for very general reasons.
 Unfortunately, even if we apply unrealistically restrictive priors on
-image space, any posterior PDF over true scenes $s$ will be a
-dimensionally immense object.  Even when, in the experiments that
-follow, we restrict to small image patches, any useful description of
-``scene space'' will have a dimensionality $>10^4$ (the number of
-pixels in the scene representation).  Perhaps someday soon we will
-have good ways of describing non-trivial PDFs in spaces like
-this---maybe we even already do---but we (the authors) don't know
-anything realistic at the present day.  So proper probabilistic
-inference is not an option in the short term.  The posterior PDF over
-PSFs is even worse, because there is a different PSF for every image,
-and in the experiments that follow we will be using $>10^3$ images,
-each of which has a $10^{2.5}$-parameter PSF.
+image space, any posterior PDF over true scenes will be a function in
+$> 10^4$ dimensions even for restrictively small patches of data.
+Current techniques and computational power are not yet sufficient
+to properly solve this problem. Instead, we restrict ourselves to the
+\emph{maximum a posteriori} (MAP) optimization task. Instead of
+marginalizing over PSFs, MAP inference involves finding the values of
+$\scene$ and $\{\psf_n\}$ that maximize the posterior PDF
+\begin{equation}\eqlabel{argmax1}
+    \scene^*, \{\psf^*_n\} = \argmax_{\scene, \{\psf_n\}}
+        \prod_n p ( \scene, \psf_n \given \data_n) \quad.
+\end{equation}
+If we notice that $\log x$ is a monotonic function of $x$ and neglect
+the various irrelevant normalization constants, \eq{argmax1} can be
+equivalently posed
+\begin{equation}\eqlabel{argmax2}
+    \scene^*, \{\psf^*_n\} = \argmax_{\scene, \{\psf_n\}}
+        \sum_n \left [ -\frac{1}{2} \, \chi^2
+            + \log p (\scene) + \log p (\psf_n)
+        \right ] \quad ,
+\end{equation}
+where $p (\scene)$ and $p(\psf)$ are our prior probability functions
+over possible scenes and PSFs respectively. One could assign equal
+probability to all scenes and PSFs and find the maximum-likelihood (ML)
+solution but in practice, there are significant degeneracies and
+instabilities in the ML problem and it is useful to use priors---or
+regularizations, as they are often reffered to in the machine learning
+literature---to keep the problem tractable. The priors that we choose
+are
+\begin{equation}\eqlabel{psf-prior}
+    \log p(\psf_n) = - \gamma \, \left ( 1 - \sqrt{\pvec_n \cdot \pvec_n}
+        \right )^2 \quad,
+\end{equation}
+and
+\begin{equation}\eqlabel{scene-prior}
+    \log p(\scene) = - \lambda \, \svec \cdot \svec \quad,
+\end{equation}
+where $\gamma$ and $\lambda$ are free parameters that can be adjusted
+to improve performance. Intuitively, \eq{psf-prior} prefers PSFs that sum
+to approximately unity and \eq{scene-prior} forces the scene towards zero
+unless the data is informative. \Eq{scene-prior} is an example of the
+popular L2-regularization technique and it has the effect of reducing
+overfitting when the model has many parameters.
 
-These considerations lead us to optimization rather than sampling or
-full probabilistic approaches.  What to optimize?
+It is also standard practice to constrain both $\scene$ and $\psf$ to only
+have non-negative values. This is usually justified using ``physical''
+arguments. At first sight, this might seem natural butm in fact, it is not
+correct. While it is reasonable to force each PSF to be non-negative, it
+is likely that the faintest sources in the full inferred scene are
+below the detection threshold in any single observation but should be
+easily detectable in final scene. These sources will be very strongly
+affected by an non-negativity constraint because they might---in the units
+of the inferred scene---have \emph{negative flux}! It is, therefore,
+irresponsible to apply any non-negativity constraint to $\scene$ during
+the optimization procedure.
 
-...How regularization and optimization is related to the prior PDF and posterior PDF...
+\section{Optimization}
 
-...Some general discussion of regularizations and their consequences.
-Spend some lines bashing non-negative on $s$.  Why is that so
-dangerous?..
+To perform the optimization in \eq{argmax2}, we use a variation of the
+online algorithm called \emph{stochastic gradient}. This algorithm is
+called online because it operates on a single data point at a time
+meaning that the full dataset never needs to be loaded into memory
+simultaneously. This allows the method to scale well to very large
+datasets. If we call the set (or vector) of parameters that we are
+optimizing $w \equiv \{\scene, \psf_n\}$ and the objective function
+\begin{equation}
+    \ell (w) = \sum_n \ell_n (w_n) = \sum_n \left [ -\frac{1}{2} \, \chi^2
+            + \log p (\scene) + \log p (\psf_n)
+        \right ]
+\end{equation}
+then a traditional bulk
+gradient descent method performs iterative updates to the parameters
+of the form
+\begin{equation}\eqlabel{bulkgrad}
+    w^{(t+1)} \gets w^{(t)} - \alpha_t \, \nabla_w \ell (w^{(t)})
+    = w^{(t)} - \alpha_t \, \sum_n \nabla_{w_n} \ell_n (w_n^{(t)}) \quad,
+\end{equation}
+where $\alpha_t$ is a step size that can be tuned for efficiency and
+robustness. The problem with \eq{bulkgrad} is that it involves optimizing
+using \emph{all of the data simultaneously}. The stochastic gradient
+method relies on the linearity of the gradient to instead perform
+updates of the form
+\begin{equation}
+    w^{(t+1)} \gets w^{(t)} - \alpha_t \, \nabla_{w_m^{(t)}}
+        \ell_{m} (w_m)
+\end{equation}
+where $m$ indicates a single data point that is different for each
+iteration.
 
-...How, in general, are we going to proceed; why is online useful...
-
-\section{The method and pipeline}
-
-The method is, for each of $N$ data images $\data_n$ taken in turn:
-
-1. Use the current scene image $\scene$ to infer the PSF $\psf_n$ for data
-image $\data_n$ by non-negative least squares.  The PSF model at this
-stage is a fixed-grid mixture of $\sigma=1$~pix ($FWHM = 2.35$~pix)
-two-dimensional, circular Gaussians.  In detail, when we infer the
-PSF, we also infer a sky level, and apply a L2 regularization to keep
-the PSF smooth when there are degeneracies.
-
-2. ``Deconvolve'' the PSF $\psf_n$ to make the deconvolved PSF
-$\dpsf_n$. We perform this deconvolution by replacing the mixture of
-Gaussians with a mixture of delta-functions, with the same amplitudes.
-This follows the general idea of band-limited deconvolution
-\citep{magain}.
-
-3. Infer the scene $\scene_n$ implied by this data image $\data_n$ given the
-deconvolved PSF $\dpsf_n$.  This fit is done without constraints
-except a small regularization to deal with the fact that the scene is
-bigger than the data image.
-
-4. Update the scene by combining the current scene $\scene$ with the newly
-inferred scene $\scene_n$ according to
-\begin{eqnarray}\displaystyle
-S &\leftarrow& [1-\alpha_n]\,S + \alpha_n\,S_n
-\quad ,
+In the notation of the previous section, this can be rewritten as
+\begin{eqnarray}
+    \svec^{(t+1)}_m &\gets& \svec^{(t)}_m - \alpha_t \,
+    \frac{\dd \ell_n (w_n^{(t)})}{\dd \svec_m^{(t)}} \quad, \quad
+    \forall m = 1,\ldots,W \\
+    \pvec^{(t+1)}_k &\gets& \pvec^{(t)}_k - \alpha_t \,
+    \frac{\dd \ell_n (w_n^{(t)})}{\dd \pvec_k^{(t)}} \quad, \quad
+    \forall k = 1,\ldots,K \quad.
 \end{eqnarray}
-where $\alpha_n$ is either $2/n$ or else $2/N$.  Possibly also apply
-non-negative clipping, sky adjustment, or other constraints or
-regularizations.
 
-\section{Experiments and results}
+\section{Light Deconvolution}
 
-\section{Discussion}
+In their treatment of the deconvolution problem, \citet{magain} note that
+standard deconvolution techniques produce ring artifacts around point
+sources because the deconvolved scene violates the sampling theorem (CITE).
+This is because the \emph{perfect} deconvolution of a point source is
+essentially the Dirac $\delta$-function. A $\delta$-function can only be
+properly sampled with \emph{infinite} resolution and when it is resampled
+on a coarser grid, the brightness profile takes the form
+$\sim \frac{\sin r}{r}$. This effect is related to our argument that it
+is irrelevant to even imagine the \emph{true} scene. Instead, the best
+that one can do is to deconvolve to a system with larger but finite
+resolution.
+
+\citet{magain} go on to suggest a solution to this problem. Instead of
+trying to infer the scene at infinite resolution, it is better to rewrite
+\eq{convimg} as
+\begin{equation}
+    \data_n = \dpsf_n \ast \kernel \ast \scene + E_n
+\end{equation}
+where $\dpsf_n$ is the ``deconvolved PSF'' (dPSF) and \kernel\ is the
+PSF of the final scene. Then, the inference task is to infer
+\begin{equation}
+    \tilde{\scene} \equiv \kernel \ast \scene
+\end{equation}
+instead of \scene\ itself. This is achieved by re-writing \eq{linimg2} as
+\begin{equation}
+    \dvec_n = \tilde{\smat} \cdot \pvec_n + \evec_n
+\end{equation}
+where $\tilde{\smat}$ is related to $\tilde{\scene}$ in the same way that
+\smat\ is related \scene.
+
+\section{The Algorithm}
+
+The method used to analyze a stack of images from a TLI run is as follows:
+\begin{enumerate}
+    \item{Run TLI on the stack to pre-align the data and co-add the best
+        $\sim 1\%$ to get an initial guess at the scene $\svec^{(0)}$.}
+    \item{For each image $n = 1, \ldots, N$,
+\begin{itemize}
+    \item{Infer the PSF $\pvec_n$ using \eq{linimg2} and the current best
+        scene $\svec^{(n-1)}$ convolved with the target PSF \kernel,}
+    \item{Infer the implied scene $\hat{\svec}$ using \eq{linimg1} and
+        $\pvec_n$, and}
+    \item{Apply constraints (sky subtraction, non-negativity, \etc)
+            and the new estimate for the scene
+            \begin{equation}\eqlabel{ourupdate}
+                \svec^{(n)} \gets \svec^{(n-1)} - \alpha_n \,
+                (\svec^{(n-1)} - \hat{\svec}) \quad.
+            \end{equation}
+        }
+\end{itemize}
+        }
+\end{enumerate}
+
+The update in \eq{ourupdate} is similar to the one suggested by
+\citet{hirsch} with an extremely good choice of step-size. \citet{hirsch}
+don't ever fully solve the linear least-squares problem and instead only
+use an approximation to the solution. Our method is more computationally
+intensive but it converges faster since it is more accurate.
+
+\section{Experiments \& Results}
+
+We ran both TLI and \TheThresher\ on a stack of 30000 images of a
+trinary star system from \LCOGT\@. We show the results using 10, 30, 100,
+300, 1000, 3000 images stretched to roughly the same
+grayscale in all images.
+
+\begin{figure}[!htbp]
+    \dfmplot{tli10.png}
+    \caption{The results of co-adding the top 10 best images as determined
+        by TLI\@. The image on the right is the same data as the figure on the
+        left with a harder stretch.\figlabel{tli:10}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \threshplot{thresh10.png}
+    \caption{The results of running \TheThresher\ on 10 images.
+        The image on the right is the same data as the figure on the
+        left with a harder stretch.\figlabel{thresh:10}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \dfmplot{tli30.png}
+    \caption{The same as \fig{tli:10} for the top 30 best images.
+            \figlabel{tli:30}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \threshplot{thresh30.png}
+    \caption{The same as \fig{thresh:10} for the top 30 best images.
+            \figlabel{thresh:30}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \dfmplot{tli100.png}
+    \caption{The same as \fig{tli:10} for the top 100 best images.
+            \figlabel{tli:100}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \threshplot{thresh100.png}
+    \caption{The same as \fig{thresh:10} for the top 100 best images.
+            \figlabel{thresh:100}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \dfmplot{tli300.png}
+    \caption{The same as \fig{tli:10} for the top 300 best images.
+            \figlabel{tli:300}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \threshplot{thresh300.png}
+    \caption{The same as \fig{thresh:10} for the top 300 best images.
+            \figlabel{thresh:300}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \dfmplot{tli1000.png}
+    \caption{The same as \fig{tli:10} for the top 1000 best images.
+            \figlabel{tli:1000}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \threshplot{thresh1000.png}
+    \caption{The same as \fig{thresh:10} for the top 1000 best images.
+            \figlabel{thresh:1000}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \dfmplot{tli3000.png}
+    \caption{The same as \fig{tli:10} for the top 3000 best images.
+            \figlabel{tli:3000}}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \threshplot{thresh3000.png}
+    \caption{The same as \fig{thresh:10} for the top 3000 best images.
+            \figlabel{thresh:3000}}
+\end{figure}
 
 \acknowledgements It is a pleasure to thank
   Mike Blanton (NYU),
@@ -312,14 +571,32 @@ partially supported by NASA (grant NNX12AI50G) and the NSF
 \project{Astrophysics Data System}, and code in the the
 \project{numpy}, \project{scipy}, and \project{matplotlib} open-source
 projects.  All the code used in this paper is available at
-\url{http://davidwhogg.github.com/TheThresher/}, and sample data are
-available at [URL HERE].
+\url{http://danfm.ca/thresher}.
 
-\begin{thebibliography}{70}
-\bibitem[Hirsch \etal(2011)]{hirsch}
-Hirsch,~M., Harmeling,~S., Sra,~S., Sch\"olkopf,~B., 2011, \aap, 531, A9
-\bibitem[Magain \etal(1998)]{magain}
-Magain,~P., Courbin,~F., Sohy,~S., 1998, \apj, 494, 472 
+\begin{thebibliography}{}\raggedright
+
+\bibitem[Ayers\ \&\ Dainty(1988)]{ayers}
+    Ayers, G. R., \& Dainty, J. C. 1988, Opt. Lett., 13, 547
+
+\bibitem[Fried(1978)]{fried}
+    Fried, D. L. 1978, J. Opt. Soc. Amer., 86
+
+\bibitem[Hirsch\ \etal(2011)]{hirsch}
+Hirsch, M., Harmeling, S., Sra, S., \& Sch{\"o}lkopf, B.\ 2011, \aap, 531, A9
+
+\bibitem[Labeyrie(1970)]{labeyrie} Labeyrie, A.\ 1970, \aap, 6, 85
+
+\bibitem[Law\ \etal(2006)]{law}
+    Law, N.~M., Mackay, C.~D., \& Baldwin, J.~E.\ 2006, \aap, 446, 739
+
+\bibitem[Magain\ \etal(1998)]{magain} Magain, P., Courbin, F.,
+    \& Sohy, S.\ 1998, \apj, 494, 472
+
+
+
 \end{thebibliography}
+
+\clearpage
+\appendix
 
 \end{document}
