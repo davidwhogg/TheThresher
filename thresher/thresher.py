@@ -94,7 +94,7 @@ class Scene(object):
         else:
             self.kernel = kernel
 
-    def setup(self):
+    def setup(self, init_tli=True):
         """
         Do the initial setup for a Thresher run. This is not needed for a
         TLI run (hence why it is not in `__init__`). It first calculates the
@@ -115,83 +115,6 @@ class Scene(object):
         # And the PSF.
         self.psf_rows, self.psf_cols = \
                 utils.unravel_psf(len(self.scene), self.psf_hw)
-
-    def run_tli(self, image_list, size=None, top=None, top_percent=None):
-        """
-        Run traditional lucky imaging on a stream of data.
-
-        ## Arguments
-
-        * `image_list` (list): The list of filenames for the images which
-          will be ranked and combined using TLI.
-
-        ## Keyword Arguments
-
-        * `size` (int): The size of the scene to be determined.
-        * `top` (int): How many images should be coadded?
-        * `top_percent` (float): An alternative notation for `top` instead
-          specified by a percentage.
-
-        ## Returns
-
-        * `fns` (list): The filenames ordered from best to worst as ranked
-          by TLI.
-        * `ranks` (list): The value of the ranking scalar corresponding to
-          the images listed in `fns`.
-        * `centers` (list): The coordinates of the centers of each image as
-          determined by centroiding.
-        * `coadd` (numpy.ndarray): The resulting co-added image.
-
-        """
-        Ndata = len(image_list)
-
-        # These will be instantiated the first time through the loop.
-        stack = None
-        scene = None
-
-        # Calculate the centers and ranks of the images.
-        centers = {}
-        ranks = {}
-        for n, fn in enumerate(image_list):
-            img = utils.load_image(fn)
-            if size is None:
-                size = np.max(img.shape)
-            if stack is None:
-                # Allocate a stack for the centroided images.
-                stack = np.empty((Ndata, size, size))
-            if scene is None:
-                x = np.linspace(-0.5 * size, 0.5 * size, size) ** 2
-                r = np.sqrt(x[:, None] + x[None, :])
-                scene = 0.5 * np.exp(-0.5 * r) / np.pi
-
-            center, result, mask = utils.centroid_image(img, size, scene=scene)
-            centers[fn] = center
-            stack[n] = result
-            ranks[fn] = (n, float(result[size / 2, size / 2]))
-
-        # Sort by brightest centroided pixel.
-        ranked = sorted(ranks, reverse=True, key=lambda k: ranks[k][1])
-        fns, values = [], []
-        for i in range(len(ranked)):
-            k = ranked[i]
-            fns.append(k)
-            ranked.append(ranks[k][-1])
-
-        # Do the co-add.
-        if top is None and top_percent is None:
-            top = len(ranked)
-        elif top_percent is not None:
-            top = max(1, int(top_percent * 0.01 * len(ranked)))
-
-        top = np.atleast_1d(top)
-        final = np.zeros((len(top) + 1, size, size))
-        for j, t in enumerate(np.atleast_1d(top)):
-            for i, k in enumerate(fns[:t]):
-                final[j] += stack[ranks[k][0]] / float(t)
-        for i, k in enumerate(fns):
-            final[-1] += stack[ranks[k][0]] / float(t)
-
-        return fns, ranks, centers, final
 
     def do_update(self, fn, alpha, maskfn=None, maskhdu=0, median=True,
             nn=False):
