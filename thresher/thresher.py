@@ -7,7 +7,6 @@ __all__ = ["Scene"]
 
 import os
 import gc
-import glob
 
 import numpy as np
 
@@ -23,9 +22,8 @@ import utils
 
 def _worker(scene, data):
     # Do the inference.
-    psf = scene.infer_psf(data)
-    dlds = scene.get_dlds(data)
-    return psf, dlds
+    scene.psf = scene.infer_psf(data)
+    scene.dlds = scene.get_dlds(data)
 
 
 class Scene(object):
@@ -35,19 +33,20 @@ class Scene(object):
 
     ## Arguments
 
-    * `imgglob` (str): The filesystem glob that the data files will match
-      (e.g. `/path/to/data_*.fits`).
+    * `initial` (numpy.ndarray): An initial guess at the scene. It needs to
+      be square for now, unfortunately.
+    * `img_list` (list): The list of images to thresh.
 
     ## Keyword Arguments
 
     * `outdir` (str): The path to the directory where the output files will
       be written. This defaults to `out` in the current working directory.
       The directory will be created if needed.
+    * `centers` (numpy.ndarray): A list of the coordinates of the centers
+      of the images. If this isn't provided, we'll just assume that the data
+      are properly registered.
     * `psf_hw` (int): The half width of the PSF object.
-    * `size` (int): The size of one side of the (square) "scene" to infer.
-      This currently needs to be provided but it should eventually default
       to the full size of the data.
-    * `sky` (float): A constant piston to apply to every observation.
     * `kernel` (numpy.ndarray): The small (diffraction-limited) PSF to use
       for the light deconvolution.
     * `psfreg` (float): The strength of the PSF "sum-to-one" regularization.
@@ -55,69 +54,53 @@ class Scene(object):
       the scene.
 
     """
-    def __init__(self, imgglob, outdir="", psf_hw=13, size=None, sky=0.,
-            kernel=None, psfreg=100., sceneL2=1. / 64.):
-        self.glob = imgglob
+    def __init__(self, initial, image_list, outdir="", centers=None,
+            psf_hw=13, kernel=None, psfreg=100., sceneL2=0.0):
+        # Metadata.
+        self.image_list = image_list
         self.outdir = os.path.abspath(outdir)
-        self.sky = sky
-        self.inferred_sky = 0
-
-        self.img_number = 0
-        self.pass_number = 0
-
-        # Get the image list.
-        entries = glob.glob(self.glob)
-        self.image_list = [os.path.abspath(e) for e in sorted(entries)]
-        assert len(self.image_list) > 0, \
-                "There are no files matching '{0}'".format(imgglob)
-
-        # Set the scene size.
-        self.size = size
-
-        # L2 norm weights.
+        self.psf_hw = psf_hw
         self.psfreg = psfreg
         self.sceneL2 = sceneL2
 
-        # Initialize the PSF image as a delta function.
-        self.psf_hw = psf_hw
-        pd = 2 * psf_hw + 1
-        self.psf = np.zeros((pd, pd))
-        self.psf[psf_hw, psf_hw] = 1.
+        # Sort out the center vector and save it as a dictionary associated
+        # with specific filenames.
+        self.centers = centers
+        if centers is not None:
+            self.centers = dict([(image_list[i], centers[i])
+                for i in range(len(image_list))])
 
+        # Inference parameters.
+        self.sky = 0
+        self.scene = np.array(initial)
+
+        # 'Sky'-subtract the initial scene.
+        self.scene -= np.median(self.scene)
+
+        # Deal with the masked pixels if there are any in the initial scene
+        # by setting them to the 'sky' level.
+        self.scene[np.isnan(self.scene)] = 0.0
+
+        # Check the dimensions of the initial scene and set the size.
+        shape = self.scene.shape
+        assert shape[0] == shape[1], "The initial scene needs to be square."
+        self.size = shape[0] - 2 * self.psf_hw
+
+        # The 'kernel' used for 'light deconvolution'.
         if kernel is None:
-            # Make the PSF convolution kernel here. There's a bit of black
-            # MAGIC that could probably be fixed. The kernel is implicitly a
-            # `sigma = 1. pix` Gaussian.
             self.kernel = np.exp(-0.5 * (np.arange(-5, 6)[:, None] ** 2
                 + np.arange(-5, 6)[None, :] ** 2))
             self.kernel /= np.sum(self.kernel)
         else:
             self.kernel = kernel
 
-    def setup(self, init_tli=True):
-        """
-        Do the initial setup for a Thresher run. This is not needed for a
-        TLI run (hence why it is not in `__init__`). It first calculates the
-        initial guess for the scene (using TLI) and then figures out the
-        index gymnastics needed for unravelling the scene and PSF.
-
-        """
-        # Run lucky imaging. MAGIC: co-add the top 1 percent.
-        images, ranks, self.coords, scene = self.run_tli(self.image_list,
-                size=self.size + 2 * self.psf_hw, top_percent=1)
-        self.image_list = images
-        scene = scene[1]
-        self.scene = scene - np.median(scene)
-
-        # Calculate the mask that we will use to unravel the scene.
-        self.scene_mask = utils.unravel_scene(len(self.scene), self.psf_hw)
-
-        # And the PSF.
+        # Index gymnastics.
+        self.scene_mask = utils.unravel_scene(self.size + 2 * self.psf_hw,
+                self.psf_hw)
         self.psf_rows, self.psf_cols = \
-                utils.unravel_psf(len(self.scene), self.psf_hw)
+                utils.unravel_psf(self.size + 2 * self.psf_hw, self.psf_hw)
 
-    def do_update(self, fn, alpha, maskfn=None, maskhdu=0, median=True,
-            nn=False):
+    def do_update(self, fn, alpha, median=True, nn=False):
         """
         Do a single stochastic gradient update using the image in a
         given file and learning rate.
@@ -129,11 +112,6 @@ class Scene(object):
 
         ## Keyword Arguments
 
-        * `maskfn` (str): The path to the mask file. By default, we assume
-          that there are no masked pixels.
-        * `maskhdu` (int): The HDU number for the mask. If `maskfn` is not
-          provided and `maskhdu` is not 0, the mask is expected in a non-zero
-          HDU of `fn`.
         * `median` (bool): Subtract the median of the scene?
         * `nn` (bool): Project onto the non-negative plane?
 
@@ -145,32 +123,19 @@ class Scene(object):
         """
         image = utils.load_image(fn)
 
-        # Load the mask if it's provided.
-        if maskfn is not None or maskhdu > 0:
-            if maskfn is None:
-                maskfn = fn
-            mask = utils.load_image(maskfn, hdu=maskhdu, dtype=bool)
-        else:
-            mask = np.ones_like(image)
-
         # Center the data.
-        coords, data, m = utils.centroid_image(image, self.size,
-                scene=self.scene, coords=self.coords.get(fn, None))
-
-        # Center the mask.
-        c0, mask, m = utils.centroid_image(mask, self.size, coords=coords)
-
-        # Combine the data mask with the offset mask.
-        mask *= mask
-        mask *= ~np.isnan(data)
-        mask = np.array(mask, dtype=bool)
-
-        # Piston the data for numerical stability.
-        data += self.sky - np.min(data)
+        if self.centers is None:
+            data = utils.trim_image(image, self.size)
+            mask = ~np.isnan(data)
+        else:
+            result = utils.centroid_image(image, self.size,
+                scene=self.scene, coords=self.centers[fn])
+            data = result[1]
+            mask = ~np.isnan(data) * result[2]
 
         # Do the inference.
         self.old_scene = np.array(self.scene)
-        self.psf, self.dlds = _worker(self, data)
+        _worker(self, data)
         self.scene[mask] += alpha * self.dlds[mask]
 
         # WTF?!?
@@ -209,7 +174,7 @@ class Scene(object):
             for img_number, fn in enumerate(iml):
                 # If it's the first pass, `alpha` should decay and we
                 # should use _non-negative_ optimization.
-                if self.pass_number == 0:
+                if pass_number == 0:
                     alpha = min(2. / (1 + img_number), 0.25)
                     use_nn = nn
                 else:
@@ -309,7 +274,7 @@ class Scene(object):
         new_psf, rnorm = op.nnls(scene_matrix, data_vector)
 
         # Save the inferred sky level.
-        self.inferred_sky = new_psf[-1]
+        self.sky = new_psf[-1]
 
         # Do the index gymnastics to get the correct inferred PSF.
         # NOTE: here, we're first dropping the sky and then reversing the
@@ -385,7 +350,7 @@ class Scene(object):
         hdus[0].header.update("size", self.size)
         hdus[0].header.update("pass", pass_number)
         hdus[0].header.update("image", img_number)
-        hdus[0].header.update("sky", self.inferred_sky)
+        hdus[0].header.update("sky", self.sky)
         hdus[1].header.update("status", "old")
         hdus[2].header.update("status", "new")
 

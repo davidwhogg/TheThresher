@@ -1,5 +1,5 @@
-__all__ = ["load_image", "centroid_image", "unravel_scene", "unravel_psf",
-           "timer"]
+__all__ = ["load_image", "trim_image", "centroid_image", "unravel_scene",
+            "unravel_psf", "timer"]
 
 import time
 import logging
@@ -22,6 +22,18 @@ def load_image(fn, hdu=0, dtype=float):
     data = np.array(f[hdu].data, dtype=dtype)
     f.close()
     return data
+
+
+def trim_image(image, size):
+    """
+    Trim an image to be square with shape `(size, size)`.
+
+    """
+    shape = np.array(image.shape)
+    assert np.all(shape >= size), \
+            "You can't 'trim' an image to be larger than it was!"
+    mn = (0.5 * (shape - np.array([size, size]))).astype(int)
+    return image[mn[0]:mn[0] + size, mn[1]:mn[1] + size]
 
 
 def centroid_image(image, size, scene=None, coords=None):
@@ -47,10 +59,11 @@ def centroid_image(image, size, scene=None, coords=None):
         # Deal with shapes.
         s_dim = (np.array(scene.shape) - 1) / 2
         center = np.array(center) + s_dim
+        logging.info("Got image center: {0}".format(center))
     else:
         center = np.array(coords)
 
-    logging.info("Got image center: {0}".format(center))
+    center = center.astype(int)
 
     # Deal with the edges of the images.
     mn = center - size / 2
@@ -58,14 +71,14 @@ def centroid_image(image, size, scene=None, coords=None):
     mn_r[mn < 0] = -mn[mn < 0]
     mn[mn < 0] = 0
 
-    mx = center + size / 2
+    mx = center + 0.5 * size
     m = mx > np.array(image.shape)
     mx_r = size * np.ones_like(center)
     mx_r[m] -= mx[m] - np.array(image.shape)[m]
     mx[m] = np.array(image.shape)[m]
 
-    mask = np.zeros((size, size), dtype=int)
-    mask[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = 1
+    mask = np.zeros((size, size), dtype=bool)
+    mask[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = True
 
     # Build the result.
     result = np.zeros((size, size))
@@ -162,7 +175,3 @@ def timer(f, lf=None):
         return r
 
     return _func
-
-
-if __name__ == "__main__":
-    pass

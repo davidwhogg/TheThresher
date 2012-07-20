@@ -72,8 +72,8 @@ if __name__ == '__main__':
 
     col1 = pyfits.Column(name="filename", format="30A", array=np.array(fns))
     col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
-    col3 = pyfits.Column(name="x0", format="E", array=centers[0])
-    col4 = pyfits.Column(name="y0", format="E", array=centers[1])
+    col3 = pyfits.Column(name="x0", format="E", array=centers[:, 0])
+    col4 = pyfits.Column(name="y0", format="E", array=centers[:, 1])
     cols = pyfits.ColDefs([col1, col2, col3, col4])
     table_hdu = pyfits.new_table(cols)
     image_hdu = pyfits.PrimaryHDU(final[-1])

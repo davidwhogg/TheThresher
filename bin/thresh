@@ -9,8 +9,12 @@ replacement pipeline).
 
 import os
 import sys
+import glob
 import logging
 import datetime
+
+import numpy as np
+import pyfits
 
 # This heinous hack let's me run this script without actually installing the
 # `thresher` module. I learned this from Steve Losh at:
@@ -29,10 +33,16 @@ if __name__ == '__main__':
     # Start by parsing the command line arguments.
     desc = "Run online blind de-mixing on a lucky imaging data stream."
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument("glob", type=str,
-            help="The glob that the images must satisfy")
+    parser.add_argument("-g", "--glob", type=str, default=None,
+            help="The glob that the images must satisfy.")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The directory for the output files.")
+    parser.add_argument("-i", "--initial_scene", type=str, nargs="*",
+            default=None,
+            help="A FITS file containing the initial scene with an optional "
+                + "HDU number for the image and the metadata table.")
+    parser.add_argument("-d", "--data_path", type=str, default=".",
+            help="The basepath for the data files.")
     parser.add_argument("-m", "--no_median", action="store_true",
             help="Subtract the median of the scene?")
     parser.add_argument("--simple", action="store_true",
@@ -69,13 +79,6 @@ if __name__ == '__main__':
     except os.error:
         pass
 
-    # Write the command line arguments.
-    f = open(os.path.join(outdir, "clargs"), "a")
-    f.write("{0} - ".format(datetime.datetime.now()))
-    f.write(" ".join(sys.argv))
-    f.write("\n")
-    f.close()
-
     # Set up the `logging` module with the settings provided at the command
     # line.
     loglevel = logging.INFO
@@ -87,15 +90,75 @@ if __name__ == '__main__':
         logfn = os.path.join(outdir, args.log)
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
+    # If an initial scene is provided, try to load it and the metadata table.
+    if args.initial_scene is not None:
+        scene_fn = args.initial_scene[0]
+
+        # Get the HDU numbers.
+        try:
+            scene_hdu = int(args.initial_scene[1])
+        except IndexError:
+            scene_hdu = 0
+        try:
+            table_hdu = int(args.initial_scene[2])
+        except IndexError:
+            table_hdu = scene_hdu + 1
+
+        with pyfits.open(scene_fn) as hdus:
+            initial_scene = np.array(hdus[scene_hdu].data, dtype=float)
+            try:
+                table = hdus[table_hdu].data
+            except IndexError:
+                table = None
+
+        # Try to get the metadata.
+        image_list, ranks, centers = None, None, None
+        if table is not None:
+            try:
+                image_list = table["filename"]
+                ranks = table["rank"]
+                centers = np.vstack([table["x0"], table["y0"]]).T.astype(int)
+            except KeyError:
+                pass
+        if image_list is None:
+            logging.warn("There doesn't seem to be a metadata table in "
+                    + "{0:s}. It was expected in HDU #{1:d}. "
+                    .format(scene_fn, table_hdu))
+
+            assert args.glob is not None, \
+                    "You must provide a glob if the initial scene file " \
+                    + "doesn't have metadata."
+            image_list = glob.glob(args.glob)
+        else:
+            # Resolve the paths to the images.
+            for i in range(len(image_list)):
+                image_list[i] = os.path.join(args.data_path, image_list[i])
+    else:
+        logging.info("Running TLI to initialize the scene...")
+        image_list, ranks, centers, initial_scene = \
+                thresher.run_tli(glob.glob(args.glob), top_percent=1)
+        initial_scene = initial_scene[1]
+
+    # Trim the initial scene to be square with dimensions matching our
+    # requests.
+    if args.size is not None:
+        size = args.size
+    else:
+        size = np.min(initial_scene.shape)
+    initial_scene = thresher.utils.trim_image(initial_scene, size)
+
+    # Write the command line arguments.
+    f = open(os.path.join(outdir, "clargs"), "a")
+    f.write("{0} - ".format(datetime.datetime.now()))
+    f.write(" ".join(sys.argv))
+    f.write("\n")
+    f.close()
+
     # Start the inference.
-    scene = thresher.Scene(args.glob, outdir, psf_hw=args.psf_hw,
-            size=args.size, sky=args.sky, psfreg=args.psfreg,
+    scene = thresher.Scene(initial_scene, image_list, outdir=outdir,
+            centers=centers, psf_hw=args.psf_hw, psfreg=args.psfreg,
             sceneL2=args.sceneL2)
 
-    # Compute the TLI ordering.
-    scene.setup()
-
     # Thresh like mad.
-    scene.run_inference(npasses=args.npasses,
-            median=not args.no_median,
+    scene.run_inference(npasses=args.npasses, median=not args.no_median,
             nn=args.use_non_neg, top=args.top)

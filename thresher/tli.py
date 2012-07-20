@@ -69,6 +69,7 @@ def run_tli(image_list, top=None, top_percent=None, shift=True):
 
     # Calculate the centers and ranks of the images.
     centers = {}
+    offsets = {}
     ranks = {}
     images = {}
     weights = {}
@@ -109,6 +110,7 @@ def run_tli(image_list, top=None, top_percent=None, shift=True):
 
             # Save the image, weight and metadata.
             centers[fn] = center
+            offsets[fn] = offset
             images[fn] = img
             weights[fn] = weight
             ranks[fn] = (n, rank)
@@ -119,13 +121,15 @@ def run_tli(image_list, top=None, top_percent=None, shift=True):
     for k in ranked:
         ordered_fns.append(k)
         ordered_ranks.append(ranks[k][-1])
-        ordered_centers.append(centers[k])
+        ordered_centers.append(list(centers[k]))
+
+    ordered_ranks = np.array(ordered_ranks)
+    ordered_centers = np.array(ordered_centers)
 
     # Pad the images to the right size.
     for k in ordered_fns:
         if shift:
-            offset = (np.array(centers[k]) - 0.5 * np.array(images[k].shape)) \
-                    .astype(int)
+            offset = offsets[k]
         else:
             offset = np.zeros(2)
 
