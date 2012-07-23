@@ -285,6 +285,9 @@ class Scene(object):
         new_psf, rnorm = op.nnls(scene_matrix * mask_vector[:, None],
                 data_vector * mask_vector)
 
+        self.chi = (np.dot(scene_matrix * mask_vector[:, None], new_psf)
+                - data_vector * mask_vector)
+
         # Save the inferred sky level.
         self.sky = new_psf[-1]
 
