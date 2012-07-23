@@ -115,8 +115,8 @@ if __name__ == '__main__':
         image_list, ranks, centers = None, None, None
         if table is not None:
             try:
-                image_list = table["filename"]
-                ranks = table["rank"]
+                image_list = list(table["filename"])
+                ranks = np.array(table["rank"])
                 centers = np.vstack([table["x0"], table["y0"]]).T.astype(int)
             except KeyError:
                 pass
