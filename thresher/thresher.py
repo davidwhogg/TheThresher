@@ -135,10 +135,11 @@ class Scene(object):
         # Do the inference.
         self.old_scene = np.array(self.scene)
 
-        self.psf = self.infer_psf(data, mask)
+        self.psf, self.sky = self.infer_psf(data, mask)
         print "sky:", self.sky
         self.dlds = self.get_dlds(data, mask)
 
+        # self.old_scene = self.scene + alpha * self.dlds
         self.scene += alpha * self.dlds
 
         # WTF?!?
@@ -183,6 +184,8 @@ class Scene(object):
                 else:
                     alpha = 2. / N  # MAGIC: 2.
                     use_nn = False
+
+                alpha = 0.01 * alpha
 
                 data = self.do_update(fn, alpha, median=median, nn=use_nn)
 
@@ -285,17 +288,18 @@ class Scene(object):
         new_psf, rnorm = op.nnls(scene_matrix * mask_vector[:, None],
                 data_vector * mask_vector)
 
+        # Compute the chi vector.
         self.chi = (np.dot(scene_matrix * mask_vector[:, None], new_psf)
-                - data_vector * mask_vector)
+                - data_vector * mask_vector).reshape((D, D))
 
-        # Save the inferred sky level.
-        self.sky = new_psf[-1]
+        # Get the inferred sky level.
+        sky = new_psf[-1]
 
         # Do the index gymnastics to get the correct inferred PSF.
         # NOTE: here, we're first dropping the sky and then reversing the
         # PSF object because of the way that the `convolve` function is
         # defined.
-        return new_psf[:-1][::-1].reshape((P, P))
+        return new_psf[:-1][::-1].reshape((P, P)), sky
 
     @utils.timer
     def infer_scene(self, data):
@@ -362,7 +366,9 @@ class Scene(object):
                 pyfits.ImageHDU(self.scene),
                 pyfits.ImageHDU(self.psf),
                 pyfits.ImageHDU(self.kernel),
-                pyfits.ImageHDU(self.old_scene)]
+                pyfits.ImageHDU(self.old_scene),
+                pyfits.ImageHDU(convolve(self.psf, convolve(self.kernel,
+                    self.old_scene, "same"), "valid") - data + self.sky)]
 
         hdus[0].header.update("datafn", fn)
         hdus[0].header.update("size", self.size)
