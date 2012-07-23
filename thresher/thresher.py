@@ -7,6 +7,7 @@ __all__ = ["Scene"]
 
 import os
 import gc
+import logging
 
 import numpy as np
 
@@ -18,12 +19,6 @@ import scipy.optimize as op
 import pyfits
 
 import utils
-
-
-def _worker(scene, data):
-    # Do the inference.
-    scene.psf = scene.infer_psf(data)
-    scene.dlds = scene.get_dlds(data)
 
 
 class Scene(object):
@@ -135,8 +130,12 @@ class Scene(object):
 
         # Do the inference.
         self.old_scene = np.array(self.scene)
-        _worker(self, data)
-        self.scene[mask] += alpha * self.dlds[mask]
+
+        self.psf = self.infer_psf(data, mask)
+        print "sky:", self.sky
+        self.dlds = self.get_dlds(data, mask)
+
+        self.scene += alpha * self.dlds
 
         # WTF?!?
         gc.collect()
@@ -150,7 +149,7 @@ class Scene(object):
         return data
 
     def run_inference(self, npasses=5, median=False, nn=True, top=None,
-            thin=10):
+            thin=1):
         """
         Thresh the data.
 
@@ -231,7 +230,7 @@ class Scene(object):
         return psf_matrix
 
     @utils.timer
-    def infer_psf(self, data):
+    def infer_psf(self, data, mask):
         """
         Take data and a current belief about the scene; infer the PSF for
         this image given the scene. This code infers a sky level
@@ -242,12 +241,16 @@ class Scene(object):
         ## Arguments
 
         * `data` (numpy.ndarray): The image data.
+        * `mask` (numpy.ndarray): The inverse variance map for the data.
 
         ## Returns
 
         * `psf` (numpy.ndarray): The inferred 2D PSF image.
 
         """
+        if np.any(data * mask < 0):
+            logging.warn("This data violates the model... "
+                + "it has negative pixels. Consider DC offset.")
         # Sort out the dimensions.
         P = 2 * self.psf_hw + 1
         psf_size = P ** 2
@@ -270,8 +273,13 @@ class Scene(object):
         scene_matrix[data_size, :psf_size] = self.psfreg * 1.
         data_vector = np.append(data.flatten(), self.psfreg * np.ones(1))
 
+        # Build the mask vector. The `sqrt` means that we're treating the
+        # mask like an inverse variance map.
+        mask_vector = np.sqrt(np.append(mask.flatten(), np.ones(1)))
+
         # Infer the new PSF.
-        new_psf, rnorm = op.nnls(scene_matrix, data_vector)
+        new_psf, rnorm = op.nnls(scene_matrix * mask_vector[:, None],
+                data_vector * mask_vector)
 
         # Save the inferred sky level.
         self.sky = new_psf[-1]
@@ -313,7 +321,7 @@ class Scene(object):
         return new_scene
 
     @utils.timer
-    def get_dlds(self, data):
+    def get_dlds(self, data, mask):
         """
         Take data and a current belief about the PSF; compute the gradient of
         log-likelihood with respect to the scene.
@@ -321,6 +329,7 @@ class Scene(object):
         ## Arguments
 
         * `data` (numpy.ndarray): The data.
+        * `mask` (numpy.ndarray): The inverse variance mask for the data.
 
         ## Returns
 
@@ -330,8 +339,9 @@ class Scene(object):
         """
         psf_matrix = self.get_psf_matrix(L2=False)
 
-        dlds = psf_matrix.transpose().dot(data.flatten() -
+        dlds = psf_matrix.transpose().dot((data.flatten() - self.sky -
                 psf_matrix.dot(self.scene.flatten()))
+                * mask.flatten())
         dlds = dlds.reshape(self.scene.shape)
 
         return dlds
@@ -344,7 +354,8 @@ class Scene(object):
                 pyfits.ImageHDU(self.dlds),
                 pyfits.ImageHDU(self.scene),
                 pyfits.ImageHDU(self.psf),
-                pyfits.ImageHDU(self.kernel)]
+                pyfits.ImageHDU(self.kernel),
+                pyfits.ImageHDU(self.old_scene)]
 
         hdus[0].header.update("datafn", fn)
         hdus[0].header.update("size", self.size)

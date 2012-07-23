@@ -146,6 +146,7 @@ if __name__ == '__main__':
     else:
         size = np.min(initial_scene.shape)
     initial_scene = thresher.utils.trim_image(initial_scene, size)
+    initial_scene[np.isnan(initial_scene)] = np.median(initial_scene)
 
     # Write the command line arguments.
     f = open(os.path.join(outdir, "clargs"), "a")

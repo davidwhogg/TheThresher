@@ -84,7 +84,7 @@ def centroid_image(image, size, scene=None, coords=None):
     result = np.zeros((size, size))
     result[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = image[mn[0]:mx[0], mn[1]:mx[1]]
 
-    return center, result, mask
+    return center, result, mask.astype(float)
 
 
 #
