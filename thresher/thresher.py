@@ -254,7 +254,7 @@ class Scene(object):
         """
         if np.any(data * mask < 0):
             logging.warn("This data violates the model... "
-                + "it has negative pixels. Consider DC offset.")
+                + "it has negative pixels. Consider using --dc option.")
         # Sort out the dimensions.
         P = 2 * self.psf_hw + 1
         psf_size = P ** 2
