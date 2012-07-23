@@ -50,13 +50,14 @@ class Scene(object):
 
     """
     def __init__(self, initial, image_list, outdir="", centers=None,
-            psf_hw=13, kernel=None, psfreg=100., sceneL2=0.0):
+            psf_hw=13, kernel=None, psfreg=100., sceneL2=0.0, dc=0.0):
         # Metadata.
         self.image_list = image_list
         self.outdir = os.path.abspath(outdir)
         self.psf_hw = psf_hw
         self.psfreg = psfreg
         self.sceneL2 = sceneL2
+        self.dc = dc
 
         # Sort out the center vector and save it as a dictionary associated
         # with specific filenames.
@@ -127,6 +128,9 @@ class Scene(object):
                 scene=self.scene, coords=self.centers[fn])
             data = result[1]
             mask = ~np.isnan(data) * result[2]
+
+        # Add the DC offset.
+        data += self.dc
 
         # Do the inference.
         self.old_scene = np.array(self.scene)
@@ -362,6 +366,7 @@ class Scene(object):
         hdus[0].header.update("pass", pass_number)
         hdus[0].header.update("image", img_number)
         hdus[0].header.update("sky", self.sky)
+        hdus[0].header.update("dc", self.dc)
         hdus[1].header.update("status", "old")
         hdus[2].header.update("status", "new")
 
