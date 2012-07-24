@@ -109,8 +109,8 @@ if __name__ == '__main__':
             initial_scene = np.array(hdus[scene_hdu].data, dtype=float)
             try:
                 table = hdus[table_hdu].data
-                invert = hdus[table_hdu].header["invert"]
-                square = hdus[table_hdu].header["square"]
+                invert = hdus[table_hdu].header.get("invert", False)
+                square = hdus[table_hdu].header.get("square", False)
             except IndexError:
                 table = None
 
@@ -119,12 +119,13 @@ if __name__ == '__main__':
         if table is not None:
             try:
                 image_list = list(table["filename"])
-                mask_list = list(table["mask"])
                 ranks = np.array(table["rank"])
                 centers = np.vstack([table["x0"], table["y0"]]).T.astype(int)
+                mask_list = list(table["mask"])
             except KeyError:
                 pass
-            if np.any([m == "None" for m in mask_list]):
+            if mask_list is not None and \
+                    np.any([m == "None" for m in mask_list]):
                 mask_list = None
         if image_list is None:
             logging.warn("There doesn't seem to be a metadata table in "
