@@ -96,7 +96,8 @@ class Scene(object):
         self.psf_rows, self.psf_cols = \
                 utils.unravel_psf(self.size + 2 * self.psf_hw, self.psf_hw)
 
-    def do_update(self, fn, alpha, median=True, nn=False):
+    def do_update(self, fn, alpha, maskfn=None, maskhdu=0, invert=False,
+            square=False, median=True, nn=False):
         """
         Do a single stochastic gradient update using the image in a
         given file and learning rate.
@@ -108,6 +109,10 @@ class Scene(object):
 
         ## Keyword Arguments
 
+        * `maskfn` (str): Path to the mask file.
+        * `maskhdu` (int): The HDU number for the mask.
+        * `invert` (bool): Invert the mask entries to get inverse variance?
+        * `square` (bool): Square the mask entries to get variance?
         * `median` (bool): Subtract the median of the scene?
         * `nn` (bool): Project onto the non-negative plane?
 
@@ -118,16 +123,31 @@ class Scene(object):
 
         """
         image = utils.load_image(fn)
+        if maskfn is not None:
+            mask = utils.load_image(maskfn, hdu=maskhdu)
+            if invert:
+                inds = np.isnan(mask) + np.isinf(mask)
+                mask[inds] = 1.0 / mask[inds]
+                mask[~inds] = 0.0
+            if square:
+                mask = mask ** 2
+        else:
+            mask = np.ones_like(image)
 
         # Center the data.
         if self.centers is None:
             data = utils.trim_image(image, self.size)
-            mask = ~np.isnan(data)
+            mask = utils.trim_image(mask, self.size)
         else:
             result = utils.centroid_image(image, self.size,
-                scene=self.scene, coords=self.centers[fn])
+                    coords=self.centers[fn], mask=mask)
             data = result[1]
-            mask = ~np.isnan(data) * result[2]
+            mask = result[2]
+
+        # Deal with NaNs and infinities.
+        data[mask == 0.0] = 0.0
+        assert np.all(~(np.isnan(data) + np.isinf(data))), \
+                "Yer data's got some unmasked NaNs or infs, dude."
 
         # Add the DC offset.
         data += self.dc
@@ -353,12 +373,12 @@ class Scene(object):
         return dlds
 
     def save(self, fn, pass_number, img_number, data):
-        _id = "{0:d}-{1:08}".format(pass_number, img_number)
+        _id = "{0:03}-{1:08}".format(pass_number, img_number)
         outfn = os.path.join(self.outdir, _id + ".fits")
 
-        hdus = [pyfits.PrimaryHDU(data),
+        hdus = [pyfits.PrimaryHDU(self.scene),
                 pyfits.ImageHDU(self.dlds),
-                pyfits.ImageHDU(self.scene),
+                pyfits.ImageHDU(data),
                 pyfits.ImageHDU(self.psf),
                 pyfits.ImageHDU(self.kernel),
                 pyfits.ImageHDU(self.old_scene),

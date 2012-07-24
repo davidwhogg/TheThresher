@@ -76,11 +76,11 @@ def run_tli(image_list, top=None, top_percent=None, shift=True):
     for n, fn in enumerate(image_list):
         img = utils.load_image(fn)
 
-        # This is a sky subtraction hack.
-        img -= np.median(img)
-
         # Mask the pixels that are set to NaN in the image.
         weight = ~np.isnan(img)
+
+        # This is a sky subtraction hack.
+        img -= np.median(img[weight])
 
         # Discard the image if no pixels are included.
         if np.sum(weight):

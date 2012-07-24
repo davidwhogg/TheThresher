@@ -36,7 +36,7 @@ def trim_image(image, size):
     return image[mn[0]:mn[0] + size, mn[1]:mn[1] + size]
 
 
-def centroid_image(image, size, scene=None, coords=None):
+def centroid_image(image, size, scene=None, coords=None, mask=None):
     """
     Centroid an image based on the current scene by projecting and
     convolving.
@@ -66,25 +66,29 @@ def centroid_image(image, size, scene=None, coords=None):
     center = center.astype(int)
 
     # Deal with the edges of the images.
-    mn = center - size / 2
+    mn = np.floor(center - 0.5 * size).astype(int)
     mn_r = np.zeros_like(center)
     mn_r[mn < 0] = -mn[mn < 0]
     mn[mn < 0] = 0
 
-    mx = center + 0.5 * size
+    mx = np.floor(center + 0.5 * size).astype(int)
     m = mx > np.array(image.shape)
     mx_r = size * np.ones_like(center)
     mx_r[m] -= mx[m] - np.array(image.shape)[m]
     mx[m] = np.array(image.shape)[m]
 
-    mask = np.zeros((size, size), dtype=bool)
-    mask[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = True
+    # Build the mask for the output.
+    final_mask = np.zeros((size, size))
+    final_mask[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = 1.0
+    if mask is not None:
+        final_mask[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] *= \
+                mask[mn[0]:mx[0], mn[1]:mx[1]]
 
     # Build the result.
     result = np.zeros((size, size))
     result[mn_r[0]:mx_r[0], mn_r[1]:mx_r[1]] = image[mn[0]:mx[0], mn[1]:mx[1]]
 
-    return center, result, mask.astype(float)
+    return center, result, final_mask.astype(float)
 
 
 #
