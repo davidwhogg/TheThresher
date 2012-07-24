@@ -49,10 +49,18 @@ class Scene(object):
       the scene.
 
     """
-    def __init__(self, initial, image_list, outdir="", centers=None,
-            psf_hw=13, kernel=None, psfreg=100., sceneL2=0.0, dc=0.0):
+    def __init__(self, initial, image_list, mask_list=None, invert=False,
+            square=False, outdir="", centers=None, psf_hw=13, kernel=None,
+            psfreg=100., sceneL2=0.0, dc=0.0):
         # Metadata.
         self.image_list = image_list
+        if mask_list is not None:
+            self.mask_list = dict([(k, mask_list[i])
+                                    for i, k in enumerate(image_list)])
+        else:
+            self.mask_list = {}
+        self.invert = invert
+        self.square = square
         self.outdir = os.path.abspath(outdir)
         self.psf_hw = psf_hw
         self.psfreg = psfreg
@@ -96,8 +104,8 @@ class Scene(object):
         self.psf_rows, self.psf_cols = \
                 utils.unravel_psf(self.size + 2 * self.psf_hw, self.psf_hw)
 
-    def do_update(self, fn, alpha, maskfn=None, maskhdu=0, invert=False,
-            square=False, median=True, nn=False):
+    def do_update(self, fn, alpha, maskfn=None, maskhdu=0, median=True,
+            nn=False):
         """
         Do a single stochastic gradient update using the image in a
         given file and learning rate.
@@ -111,8 +119,6 @@ class Scene(object):
 
         * `maskfn` (str): Path to the mask file.
         * `maskhdu` (int): The HDU number for the mask.
-        * `invert` (bool): Invert the mask entries to get inverse variance?
-        * `square` (bool): Square the mask entries to get variance?
         * `median` (bool): Subtract the median of the scene?
         * `nn` (bool): Project onto the non-negative plane?
 
@@ -125,11 +131,11 @@ class Scene(object):
         image = utils.load_image(fn)
         if maskfn is not None:
             mask = utils.load_image(maskfn, hdu=maskhdu)
-            if invert:
+            if self.invert:
                 inds = np.isnan(mask) + np.isinf(mask)
-                mask[inds] = 1.0 / mask[inds]
-                mask[~inds] = 0.0
-            if square:
+                mask[~inds] = 1.0 / mask[~inds]
+                mask[inds] = 0.0
+            if self.square:
                 mask = mask ** 2
         else:
             mask = np.ones_like(image)
@@ -145,6 +151,8 @@ class Scene(object):
             mask = result[2]
 
         # Deal with NaNs and infinities.
+        if maskfn is None:
+            mask *= ~(np.isnan(data) + np.isinf(data))
         data[mask == 0.0] = 0.0
         assert np.all(~(np.isnan(data) + np.isinf(data))), \
                 "Yer data's got some unmasked NaNs or infs, dude."
@@ -205,7 +213,8 @@ class Scene(object):
                     alpha = 2. / N  # MAGIC: 2.
                     use_nn = False
 
-                data = self.do_update(fn, alpha, median=median, nn=use_nn)
+                data = self.do_update(fn, alpha, median=median, nn=use_nn,
+                        maskfn=self.mask_list.get(fn, None))
 
                 # Save the current state of the scene.
                 if img_number % thin == 0:

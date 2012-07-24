@@ -45,10 +45,6 @@ def centroid_image(image, size, scene=None, coords=None, mask=None):
     if coords is None:
         assert scene is not None
 
-        # Full 2D convolution?
-        # convolved = convolve(image, scene, mode="valid")
-        # center = np.unravel_index(convolved.argmax(), convolved.shape)
-
         # Projected convolutions.
         x0 = np.argmax(convolve(np.sum(image, axis=1), np.sum(scene, axis=1),
             mode="valid"))

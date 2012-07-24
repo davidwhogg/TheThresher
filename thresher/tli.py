@@ -9,7 +9,7 @@ import utils
 
 def pad_image_and_weight(image, weight, final_shape, offset=None):
     final_image = np.zeros(final_shape, dtype=float)
-    final_weight = np.zeros(final_shape, dtype=bool)
+    final_weight = np.zeros(final_shape, dtype=float)
 
     shape = image.shape
     rng = (0.5 * (np.atleast_1d(final_shape) - np.atleast_1d(shape))) \
@@ -20,12 +20,13 @@ def pad_image_and_weight(image, weight, final_shape, offset=None):
     final_image[rng[0]:rng[0] + shape[0], rng[1]:rng[1] + shape[1]] = \
             image
     final_weight[rng[0]:rng[0] + shape[0], rng[1]:rng[1] + shape[1]] = \
-            weight.astype(bool)
+            weight
 
     return final_image, final_weight
 
 
-def run_tli(image_list, top=None, top_percent=None, shift=True):
+def run_tli(image_list, top=None, top_percent=None, shift=True,
+        mask_list=None, invert=False, square=False):
     """
     Run traditional lucky imaging on a stream of data.
 
@@ -76,17 +77,26 @@ def run_tli(image_list, top=None, top_percent=None, shift=True):
     for n, fn in enumerate(image_list):
         img = utils.load_image(fn)
 
-        # Mask the pixels that are set to NaN in the image.
-        weight = ~np.isnan(img)
-
-        # This is a sky subtraction hack.
-        img -= np.median(img[weight])
+        if mask_list is not None:
+            weight = utils.load_image(mask_list[n])
+            if invert:
+                inds = np.isnan(weight) + np.isinf(weight)
+                weight[~inds] = 1.0 / weight[~inds]
+                weight[inds] = 0.0
+            if square:
+                weight *= weight
+        else:
+            weight = np.ones_like(img)
+            weight[np.isnan(img) + np.isinf(img)] = 0.0
 
         # Discard the image if no pixels are included.
         if np.sum(weight):
+            # This is a sky subtraction hack.
+            img -= np.median(img[weight > 0])
+
             # Set those same pixels to the median value. This is a hack to
             # make the centroiding work.
-            img[~weight] = 0
+            img[weight == 0.0] = 0.0
 
             # Do the centroiding and find the rank.
             convolved = convolve(img, scene, mode="valid")
@@ -117,9 +127,13 @@ def run_tli(image_list, top=None, top_percent=None, shift=True):
 
     # Sort by brightest centroided pixel.
     ranked = sorted(ranks, reverse=True, key=lambda k: ranks[k][1])
-    ordered_fns, ordered_ranks, ordered_centers = [], [], []
+    ordered_fns, ordered_masks, ordered_ranks, ordered_centers = [], [], [], []
     for k in ranked:
         ordered_fns.append(k)
+        if mask_list is not None:
+            ordered_masks.append(mask_list[ranks[k][0]])
+        else:
+            ordered_masks.append(None)
         ordered_ranks.append(ranks[k][-1])
         ordered_centers.append(list(centers[k]))
 
@@ -153,11 +167,14 @@ def run_tli(image_list, top=None, top_percent=None, shift=True):
     # Do the co-add.
     for j, t in enumerate(top):
         for i, k in enumerate(ordered_fns[:t]):
-            final_image[j] += images[k] * weights[k].astype(float)
-            final_weight[j] += weights[k].astype(float)
+            final_image[j] += images[k] * weights[k]
+            final_weight[j] += weights[k]
+
+    print final_weight
 
     m = final_weight > 0
     final_image[m] /= final_weight[m]
     final_image[~m] = np.nan
 
-    return ordered_fns, ordered_ranks, ordered_centers, final_image
+    return ordered_fns, ordered_masks, ordered_ranks, ordered_centers, \
+            final_image

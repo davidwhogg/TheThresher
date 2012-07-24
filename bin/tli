@@ -28,14 +28,19 @@ if __name__ == '__main__':
     desc = "Run traditional lucky imaging."
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("glob", type=str,
-            help="The glob that the imaging data should satisfy")
+            help="The glob that the imaging data should satisfy.")
+    parser.add_argument("--masks", type=str, default=None,
+            help="The glob that the mask data files satisfy.")
+    parser.add_argument("--type", type=str, default="invvar",
+            choices=["invvar", "var", "sigma"],
+            help="The type of mask data.")
     parser.add_argument("-o", "--output", type=str, default=None,
             help="The output file.")
     parser.add_argument("-t", "--top", type=int, nargs='+', default=None,
             help="Co-add the top N images")
     parser.add_argument("--no_shift", action="store_true",
             help="Assume that the images are properly registered so don't "
-                + "shift and add.")
+                + "shift before adding.")
     parser.add_argument("--log", type=str, default=None,
             help="The filename for the log.")
     parser.add_argument("-v", "--verbose", action="store_true",
@@ -64,24 +69,48 @@ if __name__ == '__main__':
         logfn = args.log
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
+    # Figure out how to deal with masks.
+    if args.type == "invvar":
+        invert, square = False, False
+    elif args.type == "var":
+        invert, square = True, False
+    elif args.type == "sigma":
+        invert, square = True, True
+
+    # Find mask list.
+    if args.masks is None:
+        mask_list = None
+    else:
+        mask_list = glob.glob(args.masks)
+
     # Run the pipeline.
     image_list = glob.glob(args.glob)
-    fns, ranks, centers, final = thresher.run_tli(image_list, top=args.top,
-            shift=not args.no_shift)
+    fns, masks, ranks, centers, final = thresher.run_tli(image_list,
+            top=args.top, shift=not args.no_shift, mask_list=mask_list,
+            invert=invert, square=square)
     fns = [os.path.split(fn)[-1] for fn in fns]
 
     # Get the maximum file length.
-    length = np.max([len(f) for f in fns])
-    print length
+    length = 0
+    if mask_list is not None:
+        masks = [os.path.split(fn)[-1] for fn in masks]
+        length = np.max([len(f) for f in masks])
+    length = np.max([np.max([len(f) for f in fns]), length])
 
-    # Set up the FITS file.
+    # Metadata table HDU.
     col1 = pyfits.Column(name="filename", format="{0:d}A".format(length),
             array=np.array(fns))
-    col2 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
-    col3 = pyfits.Column(name="x0", format="E", array=centers[:, 0])
-    col4 = pyfits.Column(name="y0", format="E", array=centers[:, 1])
-    cols = pyfits.ColDefs([col1, col2, col3, col4])
+    col2 = pyfits.Column(name="mask", format="{0:d}A".format(length),
+            array=np.array(masks))
+    col3 = pyfits.Column(name="rank", format="E", array=np.array(ranks))
+    col4 = pyfits.Column(name="x0", format="E", array=centers[:, 0])
+    col5 = pyfits.Column(name="y0", format="E", array=centers[:, 1])
+    cols = pyfits.ColDefs([col1, col2, col3, col4, col5])
     table_hdu = pyfits.new_table(cols)
+    table_hdu.header.update("invert", invert)
+    table_hdu.header.update("square", square)
+
+    # Full co-add HDU.
     image_hdu = pyfits.PrimaryHDU(final[-1])
     image_hdu.header.update("cli", " ".join(sys.argv))
     hdus = [image_hdu]

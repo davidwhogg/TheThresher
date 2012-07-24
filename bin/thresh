@@ -91,6 +91,7 @@ if __name__ == '__main__':
         logging.basicConfig(filename=logfn, level=loglevel, filemode="w")
 
     # If an initial scene is provided, try to load it and the metadata table.
+    invert, square = False, False
     if args.initial_scene is not None:
         scene_fn = args.initial_scene[0]
 
@@ -108,18 +109,23 @@ if __name__ == '__main__':
             initial_scene = np.array(hdus[scene_hdu].data, dtype=float)
             try:
                 table = hdus[table_hdu].data
+                invert = hdus[table_hdu].header["invert"]
+                square = hdus[table_hdu].header["square"]
             except IndexError:
                 table = None
 
         # Try to get the metadata.
-        image_list, ranks, centers = None, None, None
+        image_list, mask_list, ranks, centers = None, None, None, None
         if table is not None:
             try:
                 image_list = list(table["filename"])
+                mask_list = list(table["mask"])
                 ranks = np.array(table["rank"])
                 centers = np.vstack([table["x0"], table["y0"]]).T.astype(int)
             except KeyError:
                 pass
+            if np.any([m == "None" for m in mask_list]):
+                mask_list = None
         if image_list is None:
             logging.warn("There doesn't seem to be a metadata table in "
                     + "{0:s}. It was expected in HDU #{1:d}. "
@@ -133,9 +139,11 @@ if __name__ == '__main__':
             # Resolve the paths to the images.
             for i in range(len(image_list)):
                 image_list[i] = os.path.join(args.data_path, image_list[i])
+                if mask_list is not None:
+                    mask_list[i] = os.path.join(args.data_path, mask_list[i])
     else:
         logging.info("Running TLI to initialize the scene...")
-        image_list, ranks, centers, initial_scene = \
+        image_list, mask_list, ranks, centers, initial_scene = \
                 thresher.run_tli(glob.glob(args.glob), top_percent=1)
         initial_scene = initial_scene[1]
 
@@ -146,7 +154,8 @@ if __name__ == '__main__':
     else:
         size = np.min(initial_scene.shape)
     initial_scene = thresher.utils.trim_image(initial_scene, size)
-    initial_scene[np.isnan(initial_scene)] = np.median(initial_scene)
+    initial_scene[np.isnan(initial_scene)] = \
+            np.median(initial_scene[~np.isnan(initial_scene)])
 
     # Write the command line arguments.
     f = open(os.path.join(outdir, "clargs"), "a")
@@ -156,9 +165,10 @@ if __name__ == '__main__':
     f.close()
 
     # Start the inference.
-    scene = thresher.Scene(initial_scene, image_list, outdir=outdir,
-            centers=centers, psf_hw=args.psf_hw, psfreg=args.psfreg,
-            sceneL2=args.sceneL2, dc=args.dc)
+    scene = thresher.Scene(initial_scene, image_list, mask_list=mask_list,
+            invert=invert, square=square,
+            outdir=outdir, centers=centers, psf_hw=args.psf_hw,
+            psfreg=args.psfreg, sceneL2=args.sceneL2, dc=args.dc)
 
     # Thresh like mad.
     scene.run_inference(npasses=args.npasses, median=not args.no_median,
