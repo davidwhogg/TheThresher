@@ -185,8 +185,6 @@ class Scene(object):
                     alpha = 2. / N  # MAGIC: 2.
                     use_nn = False
 
-                alpha = 0.01 * alpha
-
                 data = self.do_update(fn, alpha, median=median, nn=use_nn)
 
                 # Save the current state of the scene.
@@ -266,7 +264,8 @@ class Scene(object):
         data_size = D ** 2
 
         # Build scene matrix from kernel-convolved scene.
-        kc_scene = convolve(self.kernel, self.scene, mode="same")
+        # kc_scene = convolve(self.kernel, self.scene, mode="same")
+        kc_scene = np.array(self.scene)
 
         scene_matrix = np.zeros((data_size + 1, psf_size + 1))
 
