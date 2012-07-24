@@ -74,84 +74,10 @@ class Tests(object):
                             1,  2,  3,  5,  6,  7,  9, 10, 11,
                             4,  5,  6,  8,  9, 10, 12, 13, 14,
                             5,  6,  7,  9, 10, 11, 13, 14, 15], dtype=int)
-        b_cols = np.append(b_cols, np.arange(S ** 2))
-
         b_rows = np.concatenate([k * np.ones((2 * P + 1) ** 2, dtype=int)
                             for k in range(4)])
-        b_rows = np.append(b_rows, np.arange(4, 4 + S ** 2))
 
         assert np.all(rows == b_rows) and np.all(cols == b_cols)
-
-    def get_scene(self):
-        """
-        Get a scene object initialized in the test data directory.
-
-        """
-        bp = os.path.join(os.path.split(os.path.abspath(__file__))[0],
-                "..", "test",
-                "*.fits")
-        scene = thresher.Scene(bp, psf_hw=17)
-        scene.initialize_with_data()
-        return scene
-
-    def test_psf_infer_convolution(self):
-        """
-        test to make sure that the convolution happening within the infer
-        psf step is doing what we think it is.
-
-        note: the psf must be reversed in the matrix operation for things to
-        work out properly.
-
-        """
-        scene = self.get_scene()
-        kc_scene = thresher.convolve(scene.scene, scene.kernel, mode="same")
-
-        # generate a random psf.
-        psf_size = 2 * scene.psf_hw + 1
-        psf = np.random.rand(psf_size ** 2).reshape((psf_size,) * 2)
-
-        # do the convolution.
-        convolution = thresher.convolve(kc_scene, psf, mode="valid")
-
-        # do the matrix operation with the _reversed_ psf.
-        matrix = np.dot(kc_scene.flatten()[scene.scene_mask],
-                psf.flatten()[::-1]).reshape(convolution.shape)
-
-        # check the results.
-        np.testing.assert_allclose(convolution, matrix)
-
-    def test_scene_infer_convolution(self):
-        """
-        Test to make sure that the convolution happening within the infer
-        scene step is doing what we think it is.
-
-        """
-        scene = self.get_scene()
-
-        S = len(scene.scene)
-        D = S - 2 * scene.psf_hw
-
-        # Generate a random psf.
-        psf_size = 2 * scene.psf_hw + 1
-        psf = np.random.rand(psf_size ** 2).reshape((psf_size,) * 2)
-
-        # Generate the PSF matrix. NOTE: the PSF is reversed here.
-        vals = np.zeros((D ** 2, psf_size ** 2)) + psf.flatten()[None, ::-1]
-        vals = vals.flatten()
-        vals = np.append(vals, np.ones(S ** 2))
-
-        psf_matrix = csr_matrix((vals, (scene.psf_rows, scene.psf_cols)),
-                shape=(D ** 2 + S ** 2, S ** 2))
-
-        # Do the convolution.
-        convolution = thresher.convolve(scene.scene, psf, mode="valid")
-
-        # Do the matrix operation.
-        matrix = psf_matrix.dot(scene.scene.flatten())
-        matrix = matrix[:D ** 2].reshape((D, D))
-
-        # Check the results.
-        np.testing.assert_allclose(convolution, matrix)
 
     def test_convolution(self):
         """
@@ -199,14 +125,61 @@ class Tests(object):
 
         # Run the centroid.
         size = 24
-        coords, data, mask = utils.centroid_image(img, scene, size)
+        coords, data, mask = utils.centroid_image(img, size, scene=scene)
 
         # Make sure that it gets the right coordinates.
         truth = centers[np.argmax(amps)]
         assert np.all(coords[::-1] == truth)
 
+    def test_psf_inference(self):
+        """
+        Make sure that the PSF inference gives the right thing in the limit
+        of a delta function scene.
+
+        """
+        hw = 10
+        dim = 2 * hw + 1
+        sky = 4000.0
+
+        # Build a delta function scene.
+        initial_scene = np.zeros((dim + 2 * hw, dim + 2 * hw))
+        initial_scene[2 * hw, 2 * hw] = 1.0
+
+        # Data.
+        data = np.zeros((dim, dim)) + sky
+        data[hw, hw] += 100.0
+        data[hw - 1, hw] += 50.0
+        data[hw + 1, hw] += 50.0
+        data[hw, hw - 1] += 50.0
+        data[hw, hw + 1] += 50.0
+
+        mask = np.ones_like(data)
+
+        # Kernel.
+        kernel = np.zeros((3, 3))
+        kernel[1, 1] = 1.0
+
+        # Do the inference.
+        scene = thresher.Scene(initial_scene, [], psf_hw=hw, psfreg=0.0,
+                kernel=kernel)
+        psf, sky = scene.infer_psf(data, mask)
+
+        import matplotlib.pyplot as pl
+
+        pl.figure()
+
+        pl.subplot(121)
+        pl.imshow(data, interpolation="nearest", cmap="gray")
+
+        pl.subplot(122)
+        pl.imshow(psf, interpolation="nearest", cmap="gray")
+
+        pl.savefig("test.png")
+
+        print psf
+
 
 if __name__ == "__main__":
     tests = Tests()
     tests.setUp()
-    tests.test_centroid()
+    tests.test_psf_inference()
