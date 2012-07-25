@@ -53,7 +53,7 @@ if __name__ == '__main__':
             help="The size of the inferred scene.")
     parser.add_argument("--psf_hw", type=int, default=13,
             help="The half width of the inferred PSF image.")
-    parser.add_argument("--psfreg", type=float, default=1.,
+    parser.add_argument("--psfreg", type=float, default=0.0,
             help="The strength of the sum-to-one regularization on the PSF.")
     parser.add_argument("--sceneL2", type=float, default=0.0,
             help="The strength of the L2 regularization on the scene.")
