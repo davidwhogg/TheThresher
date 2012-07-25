@@ -26,7 +26,7 @@ def pad_image_and_weight(image, weight, final_shape, offset=None):
 
 
 def run_tli(image_list, top=None, top_percent=None, shift=True,
-        mask_list=None, invert=False, square=False):
+        mask_list=None, invert=False, square=False, scene=None):
     """
     Run traditional lucky imaging on a stream of data.
 
@@ -59,10 +59,12 @@ def run_tli(image_list, top=None, top_percent=None, shift=True,
 
     """
     # Build the scene to convolve with. It's a small, pixelated Gaussian.
-    dim = 10
-    x = np.linspace(-0.5 * dim, 0.5 * dim, dim) ** 2
-    r = np.sqrt(x[:, None] + x[None, :])
-    scene = 0.5 * np.exp(-0.5 * r) / np.pi
+    if scene is None:
+        dim = 10
+        x = np.linspace(-0.5 * dim, 0.5 * dim, dim) ** 2
+        r = np.sqrt(x[:, None] + x[None, :])
+        scene = 0.5 * np.exp(-0.5 * r) / np.pi
+
     s_dim = (np.array(scene.shape) - 1) / 2
 
     # Initialized the first time through the data.
@@ -107,6 +109,7 @@ def run_tli(image_list, top=None, top_percent=None, shift=True,
             # Because of the "valid" in the convolve, we need to offset
             # based on the size of the "scene".
             center = np.array(center) + s_dim
+
             offset = (center - 0.5 * np.array(img.shape)).astype(int)
 
             # Keep track of how the largest offset affects the final shape
@@ -169,8 +172,6 @@ def run_tli(image_list, top=None, top_percent=None, shift=True,
         for i, k in enumerate(ordered_fns[:t]):
             final_image[j] += images[k] * weights[k]
             final_weight[j] += weights[k]
-
-    print final_weight
 
     m = final_weight > 0
     final_image[m] /= final_weight[m]

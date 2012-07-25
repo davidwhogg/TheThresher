@@ -85,9 +85,20 @@ if __name__ == '__main__':
 
     # Run the pipeline.
     image_list = glob.glob(args.glob)
+    fns0, masks, ranks, centers0, final = thresher.run_tli(image_list,
+            shift=not args.no_shift, mask_list=mask_list,
+            invert=invert, square=square)
+
+    scene = thresher.utils.trim_image(final[0], np.min(final.shape))
+
     fns, masks, ranks, centers, final = thresher.run_tli(image_list,
             top=args.top, shift=not args.no_shift, mask_list=mask_list,
-            invert=invert, square=square)
+            invert=invert, square=square, scene=scene)
+
+    for i in range(len(fns)):
+        print centers0[fns0.index(fns[i])],
+        print centers[i]
+
     fns = [os.path.split(fn)[-1] for fn in fns]
 
     # Get the maximum file length.
