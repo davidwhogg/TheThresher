@@ -401,7 +401,5 @@ class Scene(object):
         hdus[0].header.update("image", img_number)
         hdus[0].header.update("sky", self.sky)
         hdus[0].header.update("dc", self.dc)
-        hdus[1].header.update("status", "old")
-        hdus[2].header.update("status", "new")
 
         pyfits.HDUList(hdus).writeto(outfn, clobber=True)

@@ -37,12 +37,11 @@ _fig = pl.figure(figsize=(16, 12))
 def plot_state(fn, outdir):
     try:
         hdus = pyfits.open(fn)
-        data = np.array(hdus[0].data, dtype=float)
-        this_scene = np.array(hdus[1].data, dtype=float)
-        new_scene = np.array(hdus[2].data, dtype=float)
+        new_scene = np.array(hdus[0].data, dtype=float)
+        dlds = np.array(hdus[1].data, dtype=float)
+        data = np.array(hdus[2].data, dtype=float)
         psf = np.array(hdus[3].data, dtype=float)
-        kernel = np.array(hdus[4].data, dtype=float)
-        hdus.close()
+        old_scene = np.array(hdus[5].data, dtype=float)
     except ValueError:
         # The file is still being written... this only seems to matter on
         # broiler.
@@ -56,12 +55,17 @@ def plot_state(fn, outdir):
             os.path.split(hdus[0].header.get("datafn"))[-1] \
                     .replace("_", "\\_")]
 
+    sky = float(hdus[0].header.get("sky"))
+    dc = float(hdus[0].header.get("dc"))
+
+    hdus.close()
+
     imgfn = os.path.join(outdir, os.path.split(os.path.splitext(fn)[0])[1]
             + ".png")
 
     try:
-        thresher.plot_inference_step(_fig, data, this_scene, new_scene, psf,
-                kernel, meta=meta, sky=float(hdus[0].header.get("sky")))
+        thresher.plot_inference_step(_fig, data, old_scene, new_scene, psf,
+                dlds, meta=meta, sky=sky, dc=dc)
         logging.info("Saving figure to: {0}".format(imgfn))
         pl.savefig(imgfn)
     except ValueError:

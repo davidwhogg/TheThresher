@@ -66,8 +66,8 @@ def estimate_sigma(scene):
     return sigma
 
 
-def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
-        meta=[], sky=0.0):
+def plot_inference_step(fig, data, old_scene, new_scene, dpsf, dlds,
+        meta=[], sky=0.0, dc=0.0):
     """
     Plot the images produced by a single update step.
 
@@ -85,9 +85,11 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
 
     """
     fig.clf()
+    fig.subplots_adjust(left=0.02, bottom=0.02, right=0.98, top=0.95,
+            wspace=0.05, hspace=0.1)
 
     # Build the subplots.
-    rows, cols = 3, 4
+    rows, cols = 2, 3
     axes = []
 
     for ri, ci in itertools.product(range(rows), range(cols)):
@@ -99,23 +101,22 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
     sigma = estimate_sigma(new_scene)
     scene_range = np.array([-2.5, 5]) * sigma
 
+    # Compute the predicted image.
+    predicted = convolve(old_scene, dpsf, mode="valid") + sky - dc
+
+    # Medians.
+    scene_median = np.median(new_scene)
+    data_median = np.median(data)
+
     # Set up which data will go in which panel.
-    psf = convolve(dpsf, kernel, mode="same")
     norm = np.sum(dpsf)
-    predicted = convolve(this_scene, psf, mode="valid") + sky
-    delta = data - predicted
-    panels = [[("PSF", psf),
-        ("Data", data, np.median(data) + scene_range * norm),
-        ("This Scene", this_scene, np.median(this_scene) + scene_range),
-        ("This Scene", this_scene, np.median(this_scene) + 0.1 * scene_range)],
-        [("dPSF", dpsf),
-        (r"Predicted Data", predicted, np.median(data) + scene_range * norm),
-        ("New Scene", new_scene, np.median(new_scene) + scene_range),
-        ("New Scene", new_scene, np.median(new_scene) + 0.1 * scene_range)],
-        [("", None),
-        (r"Data - Predicted", delta, np.median(delta) + scene_range),
-        ("Update", new_scene - this_scene),
-        ("annotations", None)]]
+    panels = [
+        [("Scene", new_scene, scene_median + scene_range),
+         ("PSF", dpsf),
+         (r"$\mathrm{d}\ell / \mathrm{d} s$", dlds)],
+        [("Predicted", predicted, data_median + scene_range * norm),
+         ("Data", data, data_median + scene_range * norm),
+         ("annotations", None)]]
 
     # Do the plotting.
     size = data.shape[0]  # The size to pad/crop to.
@@ -138,13 +139,9 @@ def plot_inference_step(fig, data, this_scene, new_scene, dpsf, kernel,
             txt.append("Sky: {0:0.4f}".format(sky))
             txt.append(r"$\sum \mathrm{{dPSF}} = {0:.4f}$"
                     .format(norm))
-            txt.append(r"$\sum \mathrm{{PSF}} = {0:.4f}$"
-                    .format(np.sum(psf)))
-            txt.append("median(Data) = {0:.4f}".format(np.median(data)))
-            txt.append("median(This Scene) = {0:.4f}"
-                    .format(np.median(this_scene)))
+            txt.append("median(Data) = {0:.4f}".format(data_median))
             txt.append("median(New Scene) = {0:.4f}"
-                    .format(np.median(new_scene)))
+                    .format(scene_median))
 
             for i in range(len(txt)):
                 ax.text(0, 1 - i * line_height, txt[i], ha="left", va="top",
