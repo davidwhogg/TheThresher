@@ -89,7 +89,8 @@ if __name__ == '__main__':
             shift=not args.no_shift, mask_list=mask_list,
             invert=invert, square=square)
 
-    scene = thresher.utils.trim_image(final[0], np.min(final.shape))
+    scene = thresher.utils.trim_image(final[0],
+            int(0.5 * np.mean(final.shape)))
 
     fns, masks, ranks, centers, final = thresher.run_tli(image_list,
             top=args.top, shift=not args.no_shift, mask_list=mask_list,
