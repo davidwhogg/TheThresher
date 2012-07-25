@@ -59,6 +59,10 @@ if __name__ == '__main__':
             help="The strength of the L2 regularization on the scene.")
     parser.add_argument("--dc", type=float, default=0.0,
             help="The DC-\"sky\" level to add to each data image")
+    parser.add_argument("--light", action="store_true",
+            help="Use light deconvolution?")
+    parser.add_argument("--thin", type=int, default=10,
+            help="How many steps between saved state.")
     parser.add_argument("-n", "--npasses", type=int, default=1,
             help="The number of inference passes to run")
     parser.add_argument("-t", "--top", type=int, default=None,
@@ -169,8 +173,9 @@ if __name__ == '__main__':
     scene = thresher.Scene(initial_scene, image_list, mask_list=mask_list,
             invert=invert, square=square,
             outdir=outdir, centers=centers, psf_hw=args.psf_hw,
-            psfreg=args.psfreg, sceneL2=args.sceneL2, dc=args.dc)
+            psfreg=args.psfreg, sceneL2=args.sceneL2, dc=args.dc,
+            light=args.light)
 
     # Thresh like mad.
     scene.run_inference(npasses=args.npasses, median=not args.no_median,
-            nn=args.use_non_neg, top=args.top)
+            nn=args.use_non_neg, top=args.top, thin=args.thin)

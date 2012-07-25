@@ -51,7 +51,7 @@ class Scene(object):
     """
     def __init__(self, initial, image_list, mask_list=None, invert=False,
             square=False, outdir="", centers=None, psf_hw=13, kernel=None,
-            psfreg=100., sceneL2=0.0, dc=0.0):
+            psfreg=0., sceneL2=0.0, dc=0.0, light=False):
         # Metadata.
         self.image_list = image_list
         if mask_list is not None:
@@ -66,6 +66,7 @@ class Scene(object):
         self.psfreg = psfreg
         self.sceneL2 = sceneL2
         self.dc = dc
+        self.light = False
 
         # Sort out the center vector and save it as a dictionary associated
         # with specific filenames.
@@ -293,8 +294,10 @@ class Scene(object):
         data_size = D ** 2
 
         # Build scene matrix from kernel-convolved scene.
-        # kc_scene = convolve(self.kernel, self.scene, mode="same")
-        kc_scene = np.array(self.scene)
+        if self.light:
+            kc_scene = convolve(self.kernel, self.scene, mode="same")
+        else:
+            kc_scene = np.array(self.scene)
 
         scene_matrix = np.zeros((data_size + 1, psf_size + 1))
 
@@ -390,9 +393,7 @@ class Scene(object):
                 pyfits.ImageHDU(data),
                 pyfits.ImageHDU(self.psf),
                 pyfits.ImageHDU(self.kernel),
-                pyfits.ImageHDU(self.old_scene),
-                pyfits.ImageHDU(convolve(self.psf, convolve(self.kernel,
-                    self.old_scene, "same"), "valid") - data + self.sky)]
+                pyfits.ImageHDU(self.old_scene)]
 
         hdus[0].header.update("datafn", fn)
         hdus[0].header.update("size", self.size)
