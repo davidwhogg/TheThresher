@@ -110,18 +110,26 @@ def plot_inference_step(fig, data, old_scene, new_scene, dpsf, dlds,
         axes[-1].set_yticklabels([])
 
     # Calculate stretch.
-    sigma = estimate_sigma(new_scene)
-    scene_range = np.array([-2.5, 5]) * sigma
+    scene_sigma = estimate_sigma(new_scene)
+    data_sigma = estimate_sigma(data)
+
+    # scene_range = np.array([-2.5, 5]) * sigma
 
     # Compute the predicted image.
-    predicted = convolve(old_scene, dpsf, mode="valid") + sky
+    predicted = convolve(old_scene, dpsf, mode="valid")
 
     # Medians.
     scene_median = np.median(new_scene)
     data_median = np.median(data)
 
     # Arcsinh.
-    plot_scene = 0.1 * np.arcsinh(new_scene / sigma) + 0.2
+    plot_scene     = 0.15 * np.arcsinh(new_scene / scene_sigma) + 0.2
+    plot_data      = 0.2 * np.arcsinh((data - sky) / data_sigma) + 0.2
+    plot_predicted = 0.2 * np.arcsinh(predicted / data_sigma) + 0.2
+
+    print np.min(plot_scene), np.max(plot_scene)
+    print np.min(plot_data), np.max(plot_data)
+    print np.min(plot_predicted), np.max(plot_predicted)
 
     # Set up which data will go in which panel.
     norm = np.sum(dpsf)
@@ -129,8 +137,8 @@ def plot_inference_step(fig, data, old_scene, new_scene, dpsf, dlds,
         [("Scene", plot_scene, [0, 1]),
          ("PSF", dpsf),
          (r"$\mathrm{d}\ell / \mathrm{d} s$", dlds)],
-        [("Predicted", predicted, data_median + scene_range * norm),
-         ("Data", data, data_median + scene_range * norm),
+        [("Predicted", plot_predicted, [0, 1]),
+         ("Data", plot_data, [0, 1]),
          ("annotations", None)]]
 
     # Do the plotting.
