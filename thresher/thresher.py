@@ -106,7 +106,7 @@ class Scene(object):
                 utils.unravel_psf(self.size + 2 * self.psf_hw, self.psf_hw)
 
     def do_update(self, fn, alpha, maskfn=None, maskhdu=0, median=True,
-            nn=False):
+            nn=False, hack=False):
         """
         Do a single stochastic gradient update using the image in a
         given file and learning rate.
@@ -165,6 +165,17 @@ class Scene(object):
         self.old_scene = np.array(self.scene)
 
         self.psf, self.sky = self.infer_psf(data, mask)
+
+        if hack:
+            logging.info("Hacking.")
+            X, Y = np.meshgrid(range(self.psf.shape[0]),
+                    range(self.psf.shape[1]))
+            R = np.sqrt(X ** 2 + Y ** 2)
+            outer = self.psf[R > 0.9 * self.psf_hw]
+            inds = outer > 0
+            self.psf -= np.sum(inds) / float(outer.size) \
+                    * np.median(outer[inds])
+
         print "sky:", self.sky
         self.dlds = self.get_dlds(data, mask)
 
@@ -207,12 +218,12 @@ class Scene(object):
             for img_number, fn in enumerate(iml):
                 # If it's the first pass, `alpha` should decay and we
                 # should use _non-negative_ optimization.
-                if pass_number == 0:
-                    alpha = min(2. / (1 + img_number), 0.25)
-                    use_nn = nn
-                else:
-                    alpha = 2. / N  # MAGIC: 2.
-                    use_nn = False
+                # if pass_number == 0:
+                #     alpha = min(2. / (1 + img_number), 0.25)
+                #     use_nn = nn
+                # else:
+                alpha = 2. / N  # MAGIC: 2.
+                use_nn = False
 
                 data = self.do_update(fn, alpha, median=median, nn=use_nn,
                         maskfn=self.mask_list.get(fn, None))
@@ -322,11 +333,14 @@ class Scene(object):
         # Get the inferred sky level.
         sky = new_psf[-1]
 
+        # Reshape the PSF image properly.
+        new_psf = new_psf[:-1][::-1].reshape((P, P))
+
         # Do the index gymnastics to get the correct inferred PSF.
         # NOTE: here, we're first dropping the sky and then reversing the
         # PSF object because of the way that the `convolve` function is
         # defined.
-        return new_psf[:-1][::-1].reshape((P, P)), sky
+        return new_psf, sky
 
     @utils.timer
     def infer_scene(self, data):
