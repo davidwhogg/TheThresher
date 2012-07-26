@@ -102,7 +102,7 @@ def plot_inference_step(fig, data, old_scene, new_scene, dpsf, dlds,
     scene_range = np.array([-2.5, 5]) * sigma
 
     # Compute the predicted image.
-    predicted = convolve(old_scene, dpsf, mode="valid") + sky - dc
+    predicted = convolve(old_scene, dpsf, mode="valid") + sky
 
     # Medians.
     scene_median = np.median(new_scene)
