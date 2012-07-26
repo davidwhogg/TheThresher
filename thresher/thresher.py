@@ -106,7 +106,7 @@ class Scene(object):
                 utils.unravel_psf(self.size + 2 * self.psf_hw, self.psf_hw)
 
     def do_update(self, fn, alpha, maskfn=None, maskhdu=0, median=True,
-            nn=False, hack=False):
+            nn=False, hack=True):
         """
         Do a single stochastic gradient update using the image in a
         given file and learning rate.
@@ -168,12 +168,13 @@ class Scene(object):
 
         if hack:
             logging.info("Hacking.")
-            X, Y = np.meshgrid(range(self.psf.shape[0]),
-                    range(self.psf.shape[1]))
+            X, Y = np.meshgrid(np.arange(-self.psf_hw, self.psf_hw + 1),
+                    np.arange(-self.psf_hw, self.psf_hw + 1))
             R = np.sqrt(X ** 2 + Y ** 2)
             outer = self.psf[R > 0.9 * self.psf_hw]
             inds = outer > 0
-            self.psf -= np.sum(inds) / float(outer.size) \
+            if np.any(inds):
+                self.psf -= np.sum(inds) / float(outer.size) \
                     * np.median(outer[inds])
 
         print "sky:", self.sky

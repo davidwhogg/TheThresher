@@ -49,21 +49,33 @@ def plot_image(ax, img, size=None, vrange=None):
     ax.set_ylim(ymin, ymax)
 
 
-def estimate_sigma(scene):
-    # Let's estimate the variance of new_scene. Hack anyone?
-    nsigma = np.arange(1, 5)
-    fracs = 1 - 0.5 * (1 - erf(nsigma / np.sqrt(2)))
-    median = np.median(scene)
+def estimate_sigma(scene, nsigma=3.5, tol=0.0):
+    img = scene.flatten()
+    mask = np.ones(len(img), dtype=bool)
+    ms_old = 0.0
+    for i in range(500):
+        m = np.median(img[mask])
+        ms = np.mean((img[mask] - m) ** 2)
+        mask = (img - m) ** 2 < nsigma ** 2 * ms
+        if i > 1 and np.abs(ms - ms_old) < tol:
+            break
+        ms_old = ms
+    return np.sqrt(ms)
 
-    scene_sort = np.sort(scene.flatten())
-    mask = np.array(fracs * scene.size, dtype=int)
-    quantiles = scene_sort[mask]
+    # # Let's estimate the variance of new_scene. Hack anyone?
+    # nsigma = np.arange(1, 5)
+    # fracs = 1 - 0.5 * (1 - erf(nsigma / np.sqrt(2)))
+    # median = np.median(scene)
 
-    sigmas = (quantiles - median) / nsigma
-    ind = np.arange(len(sigmas))[sigmas > 0][1]
-    sigma = sigmas[ind]
+    # scene_sort = np.sort(scene.flatten())
+    # mask = np.array(fracs * scene.size, dtype=int)
+    # quantiles = scene_sort[mask]
 
-    return sigma
+    # sigmas = (quantiles - median) / nsigma
+    # ind = np.arange(len(sigmas))[sigmas > 0][1]
+    # sigma = sigmas[ind]
+
+    # return sigma
 
 
 def plot_inference_step(fig, data, old_scene, new_scene, dpsf, dlds,
