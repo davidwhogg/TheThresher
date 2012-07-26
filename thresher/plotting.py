@@ -62,21 +62,6 @@ def estimate_sigma(scene, nsigma=3.5, tol=0.0):
         ms_old = ms
     return np.sqrt(ms)
 
-    # # Let's estimate the variance of new_scene. Hack anyone?
-    # nsigma = np.arange(1, 5)
-    # fracs = 1 - 0.5 * (1 - erf(nsigma / np.sqrt(2)))
-    # median = np.median(scene)
-
-    # scene_sort = np.sort(scene.flatten())
-    # mask = np.array(fracs * scene.size, dtype=int)
-    # quantiles = scene_sort[mask]
-
-    # sigmas = (quantiles - median) / nsigma
-    # ind = np.arange(len(sigmas))[sigmas > 0][1]
-    # sigma = sigmas[ind]
-
-    # return sigma
-
 
 def plot_inference_step(fig, data, old_scene, new_scene, dpsf, dlds,
         meta=[], sky=0.0, dc=0.0):
@@ -123,13 +108,10 @@ def plot_inference_step(fig, data, old_scene, new_scene, dpsf, dlds,
     data_median = np.median(data)
 
     # Arcsinh.
-    plot_scene     = 0.15 * np.arcsinh(new_scene / scene_sigma) + 0.2
-    plot_data      = 0.2 * np.arcsinh((data - sky) / data_sigma) + 0.2
-    plot_predicted = 0.2 * np.arcsinh(predicted / data_sigma) + 0.2
-
-    print np.min(plot_scene), np.max(plot_scene)
-    print np.min(plot_data), np.max(plot_data)
-    print np.min(plot_predicted), np.max(plot_predicted)
+    asinh = lambda img, mu, sigma, f: f * np.arcsinh((img - mu) / sigma) + 0.2
+    plot_scene = asinh(new_scene, 0.0, scene_sigma, 0.15)
+    plot_data = asinh(data, sky, data_sigma, 0.2)
+    plot_predicted = asinh(predicted, 0.0, data_sigma, 0.2)
 
     # Set up which data will go in which panel.
     norm = np.sum(dpsf)
