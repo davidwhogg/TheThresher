@@ -120,10 +120,13 @@ def plot_inference_step(fig, data, old_scene, new_scene, dpsf, dlds,
     scene_median = np.median(new_scene)
     data_median = np.median(data)
 
+    # Arcsinh.
+    plot_scene = 0.1 * np.arcsinh(new_scene / sigma) + 0.2
+
     # Set up which data will go in which panel.
     norm = np.sum(dpsf)
     panels = [
-        [("Scene", new_scene, scene_median + scene_range),
+        [("Scene", plot_scene, [0, 1]),
          ("PSF", dpsf),
          (r"$\mathrm{d}\ell / \mathrm{d} s$", dlds)],
         [("Predicted", predicted, data_median + scene_range * norm),
