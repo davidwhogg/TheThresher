@@ -88,7 +88,7 @@ if __name__ == '__main__':
     # Run the pipeline.
     image_list = glob.glob(args.glob)
     fns, masks, ranks, centers, final = thresher.run_tli(image_list,
-            shift=not args.no_shift, mask_list=mask_list,
+            top=args.top, shift=not args.no_shift, mask_list=mask_list,
             invert=invert, square=square)
 
     if args.second:
