@@ -26,7 +26,8 @@ def pad_image_and_weight(image, weight, final_shape, offset=None):
 
 
 def run_tli(image_list, top=None, top_percent=None, shift=True,
-        mask_list=None, invert=False, square=False, scene=None):
+        mask_list=None, invert=False, square=False, scene=None,
+        hdu=0):
     """
     Run traditional lucky imaging on a stream of data.
 
@@ -43,6 +44,7 @@ def run_tli(image_list, top=None, top_percent=None, shift=True,
         specified by a percentage.
     * `shift` (bool): Should the images be shifted before co-adding? This
       defaults to `True`.
+    * `hdu` (int): The HDU number for the data.
 
     ## Returns
 
@@ -77,7 +79,7 @@ def run_tli(image_list, top=None, top_percent=None, shift=True,
     images = {}
     weights = {}
     for n, fn in enumerate(image_list):
-        img = utils.load_image(fn)
+        img = utils.load_image(fn, hdu=hdu)
 
         if mask_list is not None:
             weight = utils.load_image(mask_list[n])

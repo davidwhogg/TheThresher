@@ -51,7 +51,7 @@ class Scene(object):
     """
     def __init__(self, initial, image_list, mask_list=None, invert=False,
             square=False, outdir="", centers=None, psf_hw=13, kernel=None,
-            psfreg=0., sceneL2=0.0, dc=0.0, light=False):
+            psfreg=0., sceneL2=0.0, dc=0.0, light=False, hdu=0):
         # Metadata.
         self.image_list = image_list
         if mask_list is not None:
@@ -67,6 +67,7 @@ class Scene(object):
         self.sceneL2 = sceneL2
         self.dc = dc
         self.light = False
+        self.hdu = hdu
 
         # Sort out the center vector and save it as a dictionary associated
         # with specific filenames.
@@ -129,7 +130,7 @@ class Scene(object):
           for this update.
 
         """
-        image = utils.load_image(fn)
+        image = utils.load_image(fn, hdu=self.hdu)
         if maskfn is not None:
             mask = utils.load_image(maskfn, hdu=maskhdu)
             if self.invert:
