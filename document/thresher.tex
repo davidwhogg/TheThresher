@@ -209,11 +209,11 @@ identified point sources in the imaging.
 
 From our perspective, an image read out by a real camera (with, say,
 square pixels in a focal-plane array) is a noisy sampling of the
-intensity field, convolved with some kind of point-spread function.
-Importantly, if you want to think of the image as a pure
-\emph{sampling} of a convolved intensity field---and trust us, you
-do---then the point-spread function that convolves the intensity field
-should be not the pure atmospheric PSF, nor even the
+intensity field, convolved (or perhaps correlated) with some kind of
+point-spread function.  Importantly, if you want to think of the image
+as a pure \emph{sampling} of a convolved intensity field---and trust
+us, you do---then the point-spread function that convolves the
+intensity field should be not the pure atmospheric PSF, nor even the
 instrument-convolved atmospheric PSF\@.  It should be the
 \emph{pixel-convolved} PSF \emph{at the focal plane}.  From here on,
 whenever we mention or use the PSF, we mean \emph{always} the
@@ -224,14 +224,6 @@ enormously synthetic-image computation.  Furthermore, if the
 non-pixel-convolved PSF is smooth and well-sampled, the
 pixel-convolved PSF is \emph{also} smooth, so there are no significant
 numerical losses or approximations incurred by making this choice.
-
-% % Maybe I don't get it but this seems not totally needed...
-% It pains us to point out that the PSF, as it is usually conceived, is
-% actually \emph{correlated} not \emph{convolved} with the true scene.
-% That is a choice about what the PSF is.  In what follows we will use
-% the word ``convolve'' in conformity with usual practice in astronomy,
-% but the way we show the PSFs in the figures, it is probably
-% ``correlate'' that we are really doing.
 
 To make our ideas about imaging concrete, we can represent the model
 that will be used throughout this paper for imaging data as a
