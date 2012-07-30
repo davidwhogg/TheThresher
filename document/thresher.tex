@@ -110,13 +110,18 @@
     pipeline---\TheThresher---for these kinds of data, based on online
     multi-frame blind deconvolution.  It makes use of all available
     data to obtain the best estimate of the astronomical scene in the
-    context of reasonable computational limits.  Because it uses the
-    full data set, \TheThresher\ outperforms TLI in signal-to-noise;
-    because it accounts for the individual-frame PSFs, it does this
-    without loss of angular resolution.  We demonstrate effectiveness
-    on artificial data but also real data from the \LCOGT\ and
-    \AstraLux\ lucky imaging experiments.  Source code available at
-    \url{http://danfm.ca/thresher} under the \license.
+    context of reasonable computational limits; it does not require
+    prior estimates of the point-spread functions in the frames nor
+    point sources in the scene that would provide such estimates.
+    Most importantly, the scene it returns is the optimum of a
+    justified scalar objective based on the likelihood function.
+    Because it uses the full data set, \TheThresher\ outperforms TLI
+    in signal-to-noise; because it accounts for the individual-frame
+    PSFs, it does this without loss of angular resolution.  We
+    demonstrate effectiveness on artificial data but also real data
+    from the \LCOGT\ and \AstraLux\ lucky imaging experiments.  Source
+    code available at \url{http://danfm.ca/thresher} under the
+    \license.
 \end{abstract}
 
 \keywords{%
