@@ -16,6 +16,7 @@
 \newcommand{\project}[1]{{\sffamily #1}}
 \newcommand{\TheThresher}{\project{The~Thresher}}
 \newcommand{\LCOGT}{\project{LCOGT}}
+\newcommand{\AstraLux}{\project{AstraLux}}
 \newcommand{\Python}{\project{Python}}
 \newcommand{\numpy}{\project{numpy}}
 \newcommand{\github}{\project{GitHub}}
@@ -71,22 +72,23 @@
 
 \newcommand{\dfmplot}[1]{%
 \begin{center}%
-    \includegraphics[width=\textwidth]{#1}%
+%    \includegraphics[width=\textwidth]{#1}%
 \end{center}%
 }
 \newcommand{\threshplot}[1]{%
 \begin{center}%
-\includegraphics[width=0.8\textwidth,trim=21cm 11cm 4cm 11.8cm,clip=true]{#1}%
+% \includegraphics[width=0.8\textwidth,trim=21cm 11cm 4cm 11.8cm,clip=true]{#1}%
 \end{center}%
 }
 
 \begin{document}
 
-\title{\TheThresher: We don't throw away data}
+\title{\TheThresher: Lucky imaging without all the waste}
 
 \author{%
-    Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP},\ref{email}} \&
+    Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP},\ref{email}},
     David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA}}
+    \& others TBD
 }
 
 \newcounter{address}
@@ -101,14 +103,20 @@
   Heidelberg, Germany}
 
 \begin{abstract}
-    We present a image analysis pipeline for online multi-frame blind
-    deconvolution---an alternative to traditional lucky imaging
-    techniques---that makes use of all available data to obtain the best
-    estimate of the astronomical scene within the current computational
-    limits. We demonstrate the effectiveness of this technique on data
-    from the \LCOGT\ lucky imaging dataset.
-    Source code available at \url{http://danfm.ca/thresher}
-    under the \license.
+    In traditional lucky imaging (TLI), many images are taken with a
+    fast camera, and all but the best percent or so of the data are
+    discarded in the final shift-and-add combined image.  Here we
+    present an alternative image analysis
+    pipeline---\TheThresher---for these kinds of data, based on online
+    multi-frame blind deconvolution.  It makes use of all available
+    data to obtain the best estimate of the astronomical scene in the
+    context of reasonable computational limits.  Because it uses the
+    full data set, \TheThresher\ outperforms TLI in signal-to-noise;
+    because it accounts for the individual-frame PSFs, it does this
+    without loss of angular resolution.  We demonstrate effectiveness
+    on artificial data but also real data from the \LCOGT\ and
+    \AstraLux\ lucky imaging experiments.  Source code available at
+    \url{http://danfm.ca/thresher} under the \license.
 \end{abstract}
 
 \keywords{%
