@@ -1,5 +1,6 @@
 *~
 *.aux
+*.brf
 *.fits
 *.log
 *.png
