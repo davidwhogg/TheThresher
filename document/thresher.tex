@@ -16,6 +16,7 @@
 \newcommand{\project}[1]{{\sffamily #1}}
 \newcommand{\TheThresher}{\project{The~Thresher}}
 \newcommand{\LCOGT}{\project{LCOGT}}
+\newcommand{\AstraLux}{\project{AstraLux}}
 \newcommand{\Python}{\project{Python}}
 \newcommand{\numpy}{\project{numpy}}
 \newcommand{\github}{\project{GitHub}}
@@ -71,22 +72,23 @@
 
 \newcommand{\dfmplot}[1]{%
 \begin{center}%
-    \includegraphics[width=\textwidth]{#1}%
+%    \includegraphics[width=\textwidth]{#1}%
 \end{center}%
 }
 \newcommand{\threshplot}[1]{%
 \begin{center}%
-\includegraphics[width=0.8\textwidth,trim=21cm 11cm 4cm 11.8cm,clip=true]{#1}%
+% \includegraphics[width=0.8\textwidth,trim=21cm 11cm 4cm 11.8cm,clip=true]{#1}%
 \end{center}%
 }
 
 \begin{document}
 
-\title{\TheThresher: We don't throw away data}
+\title{\TheThresher: Lucky imaging without all the waste}
 
 \author{%
-    Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP},\ref{email}} \&
+    Daniel~Foreman-Mackey\altaffilmark{\ref{CCPP},\ref{email}},
     David~W.~Hogg\altaffilmark{\ref{CCPP},\ref{MPIA}}
+    \& others TBD
 }
 
 \newcounter{address}
@@ -101,14 +103,25 @@
   Heidelberg, Germany}
 
 \begin{abstract}
-    We present a image analysis pipeline for online multi-frame blind
-    deconvolution---an alternative to traditional lucky imaging
-    techniques---that makes use of all available data to obtain the best
-    estimate of the astronomical scene within the current computational
-    limits. We demonstrate the effectiveness of this technique on data
-    from the \LCOGT\ lucky imaging dataset.
-    Source code available at \url{http://danfm.ca/thresher}
-    under the \license.
+    In traditional lucky imaging (TLI), many images are taken with a
+    fast camera, and all but the best percent or so of the data are
+    discarded in the final shift-and-add combined image.  Here we
+    present an alternative image analysis
+    pipeline---\TheThresher---for these kinds of data, based on online
+    multi-frame blind deconvolution.  It makes use of all available
+    data to obtain the best estimate of the astronomical scene in the
+    context of reasonable computational limits; it does not require
+    prior estimates of the point-spread functions in the frames nor
+    point sources in the scene that would provide such estimates.
+    Most importantly, the scene it returns is the optimum of a
+    justified scalar objective based on the likelihood function.
+    Because it uses the full data set, \TheThresher\ outperforms TLI
+    in signal-to-noise; because it accounts for the individual-frame
+    PSFs, it does this without loss of angular resolution.  We
+    demonstrate effectiveness on artificial data but also real data
+    from the \LCOGT\ and \AstraLux\ lucky imaging experiments.  Source
+    code available at \url{http://danfm.ca/thresher} under the
+    \license.
 \end{abstract}
 
 \keywords{%
@@ -121,86 +134,86 @@
 
 \section{Introduction}
 
-High-resolution imaging has seen great success in the last decades,
-with the \project{Hubble Space Telescope}, natural and artificial
-guide-star adaptive optics, and various post-processing techniques.
+High-resolution and high-contrast imaging has seen great success in
+the last decades, with the \project{Hubble Space Telescope}, natural
+and artificial guide-star adaptive optics, coronography, speckle
+imaging, lucky imaging, and various new data analysis techniques.
 With ground-based telescopes, very sophisticated hardware and/or
 software is required if one hopes to obtain high angular resolution.
-This is because atmospheric turbulence causes high frequency variations
-in the point spread function (PSF) that quickly degrade the angular
-resolution of the optics. The PSF of a standard long exposure suitable
-for astronomy will be smooth and much wider than the ideal diffraction
-limit. This is because it is produced by the time average over
-atmospheric variations. The standard post-processing techniques for
-dealing with this involve obtaining a large number of extremely short
-exposures---on the timescale of the atmospheric variations. These
-short exposures have low signal-to-noise and tend to have very
-complicated PSFs but they provide strong constraints on the
-diffraction limited scene when many images are used together.
+This is because atmospheric turbulence causes high frequency (in time
+and space) variations in the point spread function (PSF) that quickly
+degrade the angular resolution of any imaging. The PSF of a standard
+long exposure suitable for astronomy will be smooth and much broader
+than the ideal diffraction limit. This is because it is produced by
+the time average over atmospheric variations, which create randomly
+wandering and fluctuating speckles. The standard post-processing
+techniques for dealing with this involve obtaining a large number of
+extremely short exposures---on the timescale of the atmospheric
+variations. These short exposures individually have low
+signal-to-noise and very complicated PSFs, but they provide strong
+constraints on the diffraction limited scene when many images are used
+in concert.
 
 The idea of exploiting the high resolution information in short
-exposures was first suggested by \citet{labeyrie} and there has
-been a rich literature on this topic since then. In particular,
-a very popular technique called \emph{traditional lucky imaging}
+exposures was first suggested by \citet{labeyrie} and there has been a
+rich literature on this topic since. In particular, a very popular
+technique which we will call \emph{traditional lucky imaging}
 \citep[TLI;][]{law} is based on Fried's derivation of the probability
-of obtaining a
-frame with unusually ``lucky'' seeing when many images are taken
-quickly. That is, occasionally---just by chance---the wavefront
-distortions from the atmosphere will come close to canceling (or
-really canceling the imperfections in your real telescope).
-Lucky imaging is very popular because it is simple to understand and
-implement and it can be used with very inexpensive equipment, but as a
-technique it is not inexpensive because it results in a substantial
-amount of wasted data.
+of obtaining a frame with unusually ``lucky'' seeing when many images
+are taken quickly. That is, occasionally---just by chance---the
+wavefront distortions from the atmosphere will come close to canceling
+(or really canceling the imperfections in your real telescope).  These
+best frames are identified, shifted, and co-added, with the rest of
+the data relegated to the dustbing.  TLI is very popular because it is
+simple to understand and implement, it is computationally tractable,
+and it can be used with very inexpensive equipment.  As a technique,
+however, it is not \emph{really} inexpensive because it results in a
+substantial amount of wasted data; typical TLI results are based on
+only the best \emph{percent} of the acquired data.
 
-In a typical TLI imaging run, you take an enormous number
-of short frames and \emph{throw almost all of them away}.  The
-resulting average, stack, or co-add of the best images can have very
-high angular resolution.  It doesn't, of course, have very high
-signal-to-noise, simply because so little data in the end get used
-(typically about one percent), but it can be very good for making
-measurements that require high spatial resolution.
+The work presented here was motivated by the (correct) feeling
+that---treated correctly---there is no way that the traditionally
+discarded 99~percent of a TLI imaging set could be \emph{negatively}
+useful in constraining the astronomical scene!  In the context of TLI,
+the fundamental reason that throwing away data \emph{helps} is that
+the core data analysis step is shift-and-add co-addition of the
+imaging, which (though widely used in astronomy) is not justifiable
+when the point-spread function is varying rapidly.
 
-Lucky imaging is straightforward---and very simple to implement---but
-it violates one very important principle of empirical science: there
-is no way that \emph{throwing away} non-corrupted data can give you
-\emph{more information}.  It might be that doing something heuristic
-with bad data will make your results worse, but if you are doing
-something probabilistically justifiable, no datum can be
-\emph{negatively informative}.  The worst a datum can be is useless.
-There can't ever be an inferential justification---other than
-pragmatic---for discarding any relevant data.
+The pipeline we present here---\TheThresher---is a new implementation
+of an old idea.  It is a special case of a broad class of algorithms
+called \emph{blind deconvolution} \citep{ayers}.  In particular, it is
+an implementation of the multi-frame online blind deconvolution (MOBD)
+image analysis method of \citet{hirsch}. In this \documentname, we
+describe the theory behind it and details of our particular
+implementation.  Most importantly, we demonstrate the significant
+improvements over TLI made possible by this technique using real data
+from the \LCOGT\ and \AstraLux\ fast imaging cameras.
 
-In the case of lucky imaging, the fundamental reason that throwing
-away data helps is that the core data analysis step is co-addition of
-the imaging, which (though widely used in astronomy) is not
-justifiable when the point-spread function is varying rapidly.  Lucky
-imaging is also very sensible operationally: It provides results
-rapidly (even on-the-fly during the observing run), and permits
-analysis of enormous data sets without enormous computation (for
-example, it can be implemented in map-reduce). The method that we
-propose here is not as fast or as computationally efficient.  It is,
-however, justifiable within probabilistic data analysis and will
-make use of every datum.
-
-\TheThresher\ is an alternative to TLI and other post-processing
-techniques that is a special case of a broad class of algorithms
-called \emph{blind deconvolution} \citep{ayers}. In particular, it
-is an extension of the multi-frame online blind deconvolution (MOBD)
-from \citet{hirsch}. In this \documentname, we describe the theory
-behind and implementation of the robust blind deconvolution engine
-behind \TheThresher. We also demonstrate the significant improvements
-made possible by this technique using data from \LCOGT.
+After the MOBD method on which the \TheThresher\ is directly based,
+the most similar methods for fast imaging are from the speckle imaging
+community.  Speckle imaging is usually analyzed via Fourier methods
+(NEED CITATIONS, INCLUDING HOLOGRAPHIC), but it is not dissimilar to
+blind deconvolution, since the fourier methods can be thought of as
+creating models of the point-spread function.  The principal
+conceptual difference between \TheThresher\ and most of these methods
+is that \TheThresher\ is optimizing a \emph{justified scalar
+  objective,} which itself is an approximation to a likelihood
+function for the astronomical scene given the full set of imaging
+data.  An additional important difference with most of the prior work
+is that \TheThresher\ does not rely on the operator supplying
+point-spread function information, nor does it rely on having
+identified point sources in the imaging.
 
 \section{Imaging} \sectlabel{imaging}
 
 From our perspective, an image read out by a real camera (with, say,
 square pixels in a focal-plane array) is a noisy sampling of the
-intensity field, convolved with some kind of point-spread function.
-Importantly, if you want to think of the image as a pure
-\emph{sampling} of a convolved intensity field---and trust us, you
-do---then the point-spread function that convolves the intensity field
-should be not the pure atmospheric PSF, nor even the
+intensity field, convolved (or perhaps correlated) with some kind of
+point-spread function.  Importantly, if you want to think of the image
+as a pure \emph{sampling} of a convolved intensity field---and trust
+us, you do---then the point-spread function that convolves the
+intensity field should be not the pure atmospheric PSF, nor even the
 instrument-convolved atmospheric PSF\@.  It should be the
 \emph{pixel-convolved} PSF \emph{at the focal plane}.  From here on,
 whenever we mention or use the PSF, we mean \emph{always} the
@@ -211,14 +224,6 @@ enormously synthetic-image computation.  Furthermore, if the
 non-pixel-convolved PSF is smooth and well-sampled, the
 pixel-convolved PSF is \emph{also} smooth, so there are no significant
 numerical losses or approximations incurred by making this choice.
-
-% % Maybe I don't get it but this seems not totally needed...
-% It pains us to point out that the PSF, as it is usually conceived, is
-% actually \emph{correlated} not \emph{convolved} with the true scene.
-% That is a choice about what the PSF is.  In what follows we will use
-% the word ``convolve'' in conformity with usual practice in astronomy,
-% but the way we show the PSFs in the figures, it is probably
-% ``correlate'' that we are really doing.
 
 To make our ideas about imaging concrete, we can represent the model
 that will be used throughout this paper for imaging data as a
