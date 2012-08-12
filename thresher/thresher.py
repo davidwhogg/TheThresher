@@ -196,7 +196,7 @@ class Scene(object):
         return data
 
     def run_inference(self, npasses=5, median=False, nn=True, top=None,
-            thin=1):
+            thin=1, alpha=2.0, beta=1.0):
         """
         Thresh the data.
 
@@ -220,15 +220,15 @@ class Scene(object):
             for img_number, fn in enumerate(iml):
                 # If it's the first pass, `alpha` should decay and we
                 # should use _non-negative_ optimization.
-                # if pass_number == 0:
-                #     alpha = min(2. / (1 + img_number), 0.25)
-                #     use_nn = nn
-                # else:
-                alpha = 2. / N  # MAGIC: 2.
-                use_nn = False
+                if pass_number == 0:
+                    learning_rate = alpha / (beta + img_number)
+                    use_nn = nn
+                else:
+                    learning_rate = alpha / (beta + N)
+                    use_nn = False
 
-                data = self.do_update(fn, alpha, median=median, nn=use_nn,
-                        maskfn=self.mask_list.get(fn, None))
+                data = self.do_update(fn, learning_rate, median=median,
+                        nn=use_nn, maskfn=self.mask_list.get(fn, None))
 
                 # Save the current state of the scene.
                 if img_number % thin == 0:
