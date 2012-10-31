@@ -51,7 +51,7 @@ def plot_image(ax, img, size=None, vrange=None):
 
 def estimate_sigma(scene, nsigma=3.5, tol=0.0):
     img = scene.flatten()
-    mask = np.ones(len(img), dtype=bool)
+    mask = ~np.isnan(img)
     ms_old = 0.0
     for i in range(500):
         m = np.median(img[mask])

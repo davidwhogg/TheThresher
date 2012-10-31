@@ -22,7 +22,7 @@ try:
     import thresher
     thresher = thresher  # Stoopid Flakes8 errors.
 except ImportError:
-    sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+    sys.path.insert(0, os.path.abspath(os.path.join(__file__, '..', '..')))
     import thresher
     thresher = thresher  # You got it!
 
@@ -69,26 +69,23 @@ if __name__ == '__main__':
 
         # Calculate sigma.
         sigma = estimate_sigma(img)
-        median = np.median(img)
-        r = np.array([-2.5, 5]) * sigma
-        vrange = median + r
-        vrange_hard = median + 0.1 * r
+        med = np.median(img)
+
+        asinh = lambda img, mu, sigma, f: f * np.arcsinh((img - mu) / sigma) + 0.2
+        plot_img = asinh(img, med, sigma, 0.15)
 
         # Set up figure.
-        fig = pl.figure(figsize=(16, 8))
-        ax1 = fig.add_subplot(121)
-        ax2 = fig.add_subplot(122)
+        fig = pl.figure(figsize=(8, 8))
+        ax1 = fig.add_subplot(111)
 
         # Do the plotting.
-        plot_image(ax1, img, vrange=vrange)
-        plot_image(ax2, img, vrange=vrange_hard)
+        plot_image(ax1, plot_img, vrange=[0, 1])
 
         # Bookkeeping.
         if top > 0:
             ax1.set_title("Top {0:d}".format(top))
         else:
             ax1.set_title("All")
-        ax2.set_title("Stretched")
 
         if top > 0:
             fn, ext = os.path.splitext(outfn)
