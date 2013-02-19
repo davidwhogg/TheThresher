@@ -40,8 +40,10 @@ Partial financial support was provided by the
 **The Thresher** is based on a mash-up of
 
 - Hirsch et al (2011, A&A, 26, 531) *[Online multi-frame blind deconvolution
-  with super-resolution and saturation correction](http://adsabs.harvard.edu/abs/2011A%26A...531A...9H>)* and
-- Magain et al (1998, ApJ 494, 472) *[Deconvolution with correct sampling](http://adsabs.harvard.edu/abs/1998ApJ...494..472M)*.
+  with super-resolution and saturation correction](
+  http://adsabs.harvard.edu/abs/2011A%26A...531A...9H>)* and
+- Magain et al (1998, ApJ 494, 472) *[Deconvolution with correct sampling](
+  http://adsabs.harvard.edu/abs/1998ApJ...494..472M)*.
 
 At its current version, **The Thresher** is expecting to a set of
 single-band constant-pixel-scale band-limited images of the same
@@ -56,7 +58,28 @@ or full marginalization over PSF choices, don't hold your breath.
 
 ### Installation
 
-*Watch this space.*
+You should always use a [virtual environment](http://www.virtualenv.org/).
+
+First, clone [the repository](https://github.com/davidwhogg/TheThresher):
+
+```
+git clone https://github.com/davidwhogg/TheThresher.git
+cd TheThresher
+```
+
+Then, set up your virtual environment:
+
+```
+virtualenv venv --distribute
+source venv/bin/activate
+```
+
+and install the requirements:
+
+```
+pip install numpy
+pip install -r requirements.txt
+```
 
 ### Usage
 
