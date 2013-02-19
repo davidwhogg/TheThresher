@@ -84,30 +84,40 @@ pip install -r requirements.txt
 ### Usage
 
 The data should be in a set of `FITS` files in a directory somewhere.
-To run the pipeline on this directory, run `bin/thresh` as follows:
+
+To initialize, you can run a traditional lucky imaging (TLI) analysis on
+your images by executing:
 
 ```
-bin/thresh '/path/to/data/*.fits' -o /directory/for/output --size 64
+bin/tli '/path/to/data/*.fits' -o tli.fits
 ```
 
-You can run `bin/thresh -h` for more command line options.
+*Note:* there are a bunch of other command line arguments that you can
+find with the `--help` option.
+
+To plot the results, try
+
+```
+bin/tli-plot tli.fits
+```
+
+Then, to thresh the images, run:
+
+```
+bin/thresh -i tli.fits -o results
+```
+
+You can run `bin/thresh --help` for more command line options.
 
 To plot the inference in real time, start the `bin/thresh-plot` daemon,
 which will monitor the output directory and generate the plots:
 
 ```
-bin/thresh-plot /path/to/outputs -m -o /path/to/plots
+bin/thresh-plot results -m -o plots
 ```
 
 To generate all of the plots for an existing run, use:
 
 ```
-bin/thresh-plot /path/to/outputs -o /path/to/plots
-```
-
-You can also run TLI (traditional lucky imaging) on the same data as
-follows:
-
-```
-bin/tli '/path/to/data/*.fits' 64 -o tli.fits
+bin/thresh-plot results -o plots
 ```
